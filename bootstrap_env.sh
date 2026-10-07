@@ -26,10 +26,10 @@ echo "Executing MDM bootstrap setup for user: $TARGET_USER"
 echo "Dynamic Repository Name Target: $REPO_NAME"
 
 # ==========================================
-# 2. RUNTIME PREREQUISITES & HOOKS (Homebrew, PHP, Git)
+# 2. RUNTIME PREREQUISITES & HOOKS (Xcode CLT & Git)
 # ==========================================
 
-# 2a. Check/Install Xcode Command Line Tools
+# 2a. Check/Install Xcode Command Line Tools (includes Git)
 if ! xcode-select -p &>/dev/null; then
     echo "Installing Xcode Command Line Tools..."
     touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
@@ -38,34 +38,7 @@ if ! xcode-select -p &>/dev/null; then
     rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
 fi
 
-# 2b. Check/Install Homebrew Non-interactively
-BREW_BIN="/usr/local/bin/brew"
-if [ ! -f "$BREW_BIN" ]; then
-    echo "Homebrew not found. Initiating automated background install..."
-    export NONINTERACTIVE=1
-    /bin/bash -c "$(curl -fsSL https://githubusercontent.com)"
-    chown -R "$TARGET_USER":admin /usr/local/Homebrew /usr/local/bin /usr/local/share
-fi
-
-export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-
-# 2c. Ensure Git is Present
-if ! command -v git &>/dev/null; then
-    echo "Installing Git via Homebrew..."
-    sudo -u "$TARGET_USER" "$BREW_BIN" install git
-fi
-
-# 2d. Ensure modern PHP >= 8.2 is Present
-PHP_VERSION=""
-if command -v php &>/dev/null; then
-    PHP_VERSION=$(php -r 'echo PHP_VERSION_ID;')
-fi
-
-if [ -z "$PHP_VERSION" ] || [ "$PHP_VERSION" -lt 80200 ]; then
-    echo "System PHP version missing or lower than 8.2. Provisioning modern PHP..."
-    sudo -u "$TARGET_USER" "$BREW_BIN" install php@8.2
-    sudo -u "$TARGET_USER" "$BREW_BIN" link --overwrite --force php@8.2
-fi
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
 
 # ==========================================
 # 3. DIRECTORY STRUCTURE & REPOSITORY PREPARATION
@@ -97,7 +70,7 @@ fi
 echo "Writing worker loop execution script..."
 cat << 'EOF' > "$LAUNCH_SCRIPT"
 #!/bin/bash
-export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
 
 SITES_DIR="$HOME/Sites"
 PROJECT_DIR="$SITES_DIR/DYNAMIC_REPO_NAME"
@@ -132,8 +105,7 @@ open -a "Google Chrome" --args \
 while true; do
     echo "[$(date)] Starting local PHP server instance..." >> "$LOG_FILE"
 
-    # Execute the PHP server. The matching redirect operator '>> file 2>&1'
-    # intercepts normal requests alongside core engine stack faults.
+    # Execute the built-in PHP server (macOS 10.15 includes PHP 7.3+)
     php -S localhost:$PORT >> "$LOG_FILE" 2>&1
 
     echo "[$(date)] CRITICAL: PHP server dropped socket connection or crashed." >> "$LOG_FILE"
