@@ -473,6 +473,55 @@ document.addEventListener("DOMContentLoaded", () => {
             filterStatusSelect.addEventListener('change', performLiveFilter);
         }
     }
+
+    // --- Inactivity Reset Timer (5 Seconds) ---
+    let inactivityTimer;
+    function resetInactivityTimer() {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(() => {
+            const assetInput = document.getElementById('asset_number');
+            const userInput = document.getElementById('user_name');
+            const filterInput = document.getElementById('filter_query');
+            const statusSelect = document.getElementById('filter_status');
+            const alertEl = document.getElementById('statusAlert');
+
+            let hasValues = false;
+            if (assetInput && assetInput.value !== '') hasValues = true;
+            if (userInput && userInput.value !== '') hasValues = true;
+            if (filterInput && filterInput.value !== '') hasValues = true;
+            if (statusSelect && statusSelect.value !== 'all') hasValues = true;
+
+            if (hasValues) {
+                if (assetInput) assetInput.value = '';
+                if (userInput) userInput.value = '';
+                if (filterInput) {
+                    filterInput.value = '';
+                    filterInput.dispatchEvent(new Event('input'));
+                }
+                if (statusSelect) {
+                    statusSelect.value = 'all';
+                    statusSelect.dispatchEvent(new Event('change'));
+                }
+                if (alertEl) {
+                    const bsAlert = bootstrap.Alert.getOrCreateInstance(alertEl);
+                    bsAlert.close();
+                }
+            }
+
+            if (assetInput) {
+                assetInput.focus();
+                assetInput.select();
+            }
+        }, 5000);
+    }
+
+    // Reset timer on user activity events
+    ['mousemove', 'mousedown', 'keypress', 'touchstart', 'scroll', 'input'].forEach(event => {
+        document.addEventListener(event, resetInactivityTimer, true);
+    });
+
+    // Initialize timer on load
+    resetInactivityTimer();
 });
 </script>
 </body>
