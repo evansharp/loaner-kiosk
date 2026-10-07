@@ -100,11 +100,18 @@ cd "$PROJECT_DIR"
 echo "Synchronizing with upstream remote branch..." >> "$LOG_FILE"
 git pull origin $(git branch --show-current) >> "$LOG_FILE" 2>&1
 
-# Terminate any stale web servers bound to target port before starting
-lsof -ti :$PORT | xargs kill -9 2>/dev/null || true
+# -------------------------------------------------------------
+# 1. START LOCAL PHP SERVER IN BACKGROUND
+# -------------------------------------------------------------
+echo "[$(date)] Starting local PHP server instance on port $PORT..." >> "$LOG_FILE"
+php -S localhost:$PORT >> "$LOG_FILE" 2>&1 &
+PHP_PID=$!
+
+# Wait briefly for PHP server to bind to port
+sleep 1
 
 # -------------------------------------------------------------
-# 1. CHROME INITIALIZATION (Runs once at startup; no auto-revive)
+# 2. CHROME INITIALIZATION (Runs once at startup; no auto-revive)
 # -------------------------------------------------------------
 open -a "Google Chrome" --args \
   --kiosk \
@@ -114,17 +121,19 @@ open -a "Google Chrome" --args \
   "http://localhost:$PORT"
 
 # -------------------------------------------------------------
-# 2. INFINITE PHP WATCH LOOP (Logs crash/uptime analytics)
+# 3. INFINITE WATCH & RECOVERY LOOP (Logs crash/uptime analytics)
 # -------------------------------------------------------------
 while true; do
-    echo "[$(date)] Starting local PHP server instance..." >> "$LOG_FILE"
-
-    # Execute the built-in PHP server (macOS 10.15 includes PHP 7.3+)
-    php -S localhost:$PORT >> "$LOG_FILE" 2>&1
-
-    echo "[$(date)] CRITICAL: PHP server dropped socket connection or crashed." >> "$LOG_FILE"
-    echo "[$(date)] Attempting recovery bind step in 3 seconds..." >> "$LOG_FILE"
-    sleep 3
+    if ! kill -0 $PHP_PID 2>/dev/null; then
+        echo "[$(date)] CRITICAL: PHP server dropped socket connection or crashed." >> "$LOG_FILE"
+        echo "[$(date)] Attempting recovery bind step in 3 seconds..." >> "$LOG_FILE"
+        sleep 3
+        
+        lsof -ti :$PORT | xargs kill -9 2>/dev/null || true
+        php -S localhost:$PORT >> "$LOG_FILE" 2>&1 &
+        PHP_PID=$!
+    fi
+    sleep 5
 done
 EOF
 
