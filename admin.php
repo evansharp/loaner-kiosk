@@ -423,6 +423,17 @@ document.addEventListener("DOMContentLoaded", () => {
         svg.append("g")
             .call(d3.axisLeft(y));
 
+        // Y-axis Label
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", -45)
+            .attr("x", -height / 2)
+            .attr("fill", "#6c757d")
+            .style("text-anchor", "middle")
+            .style("font-size", "12px")
+            .style("font-weight", "600")
+            .text("Total Time Checked Out (Hours)");
+
         // Bars
         svg.selectAll(".bar")
             .data(rawData)

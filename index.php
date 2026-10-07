@@ -126,19 +126,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // --- SMART CHECK-OUT ---
             if (!empty($userName)) {
-                // Name provided -> Complete Check-Out
-                $insertStmt = $pdo->prepare("INSERT INTO checkouts (asset_number, user_name, checkout_time) VALUES (:asset, :name, :time)");
-                $insertStmt->execute([
-                    ':asset' => $assetNumber,
-                    ':name' => $userName,
-                    ':time' => date('Y-m-d H:i:s')
-                ]);
+                // Validate full name (require at least 2 words: e.g., First and Last name)
+                $nameWords = preg_split('/\s+/', $userName);
+                if (count($nameWords) < 2) {
+                    $message = "<strong>INVALID NAME:</strong> Please enter the full name (first and last name required).";
+                    $messageType = "danger";
+                    $soundType = "error";
+                    $flashClass = "flash-danger";
+                    $prefillAsset = $assetNumber;
+                    $prefillUser = $userName;
+                    $focusTarget = "user_name";
+                } else {
+                    // Name provided and valid -> Complete Check-Out
+                    $insertStmt = $pdo->prepare("INSERT INTO checkouts (asset_number, user_name, checkout_time) VALUES (:asset, :name, :time)");
+                    $insertStmt->execute([
+                        ':asset' => $assetNumber,
+                        ':name' => $userName,
+                        ':time' => date('Y-m-d H:i:s')
+                    ]);
 
-                $message = "<strong>CHECK-OUT SUCCESS!</strong> Chromebook <strong>#" . htmlspecialchars($assetNumber) . "</strong> assigned to <strong>" . htmlspecialchars($userName) . "</strong>.";
-                $messageType = "success";
-                $soundType = "success";
-                $flashClass = "flash-success";
-                $autoReset = true;
+                    $message = "<strong>CHECK-OUT SUCCESS!</strong> Chromebook <strong>#" . htmlspecialchars($assetNumber) . "</strong> assigned to <strong>" . htmlspecialchars($userName) . "</strong>.";
+                    $messageType = "success";
+                    $soundType = "success";
+                    $flashClass = "flash-success";
+                    $autoReset = true;
+                }
             } else {
                 // Name missing -> Prompt user to enter Name
                 $message = "Chromebook <strong>#" . htmlspecialchars($assetNumber) . "</strong> is available. Please enter/scan <strong>Person's Name</strong> to finish check-out.";
