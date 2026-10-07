@@ -9,7 +9,7 @@ if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = "loginwindow" ]; then
     TARGET_USER=$(dscl . list /Users UniqueID | awk '$2 > 500 {print $1}' | grep -v 'Shared' | head -n1)
 fi
 
-REPO_URL="https://github.com"
+REPO_URL="https://github.com/evansharp/loaner-kiosk"
 TARGET_PORT="8080"
 
 # Dynamically derive the exact folder name Git will create
@@ -51,15 +51,29 @@ if [ ! -d "$SITES_DIR" ]; then
     chown "$TARGET_USER":staff "$SITES_DIR"
 fi
 
-# Let Git naturally handle the subdirectory creation inside ~/Sites
-if [ ! -d "$PROJECT_DIR" ]; then
+# Check if we are being run manually from within a directory matching $REPO_NAME
+CURRENT_DIR_NAME=$(basename "$PWD")
+
+if [ "$CURRENT_DIR_NAME" = "$REPO_NAME" ]; then
+    echo "Detected manual execution from within existing repo directory ($CURRENT_DIR_NAME)."
+    if [ "$PROJECT_DIR" != "$PWD" ]; then
+        echo "Copying/synchronizing current repository into target path $PROJECT_DIR..."
+        mkdir -p "$PROJECT_DIR"
+        cp -R . "$PROJECT_DIR/"
+        chown -R "$TARGET_USER":staff "$PROJECT_DIR"
+    else
+        echo "Already running inside target project directory $PROJECT_DIR."
+    fi
+    cd "$PROJECT_DIR"
+    chown -R "$TARGET_USER":staff "$PROJECT_DIR"
+elif [ ! -d "$PROJECT_DIR" ]; then
     echo "Cloning repository directly into $SITES_DIR..."
     cd "$SITES_DIR"
     sudo -u "$TARGET_USER" git clone "$REPO_URL"
 else
     echo "Repository directory already exists. Verifying codebase freshness..."
     cd "$PROJECT_DIR"
-    sudo -u "$TARGET_USER" git pull origin $(sudo -u "$TARGET_USER" git branch --show-current)
+    sudo -u "$TARGET_USER" git pull origin $(sudo -u "$TARGET_USER" git branch --show-current) || true
 fi
 
 # ==========================================
