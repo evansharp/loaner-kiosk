@@ -272,19 +272,17 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
             <!-- Filter Bar (Searches Asset # OR Name) -->
             <div class="row g-3 mb-4 align-items-end">
                 <div class="col-md-7">
-                    <label for="filter_query" class="form-label text-muted small mb-1">Search Asset or Name</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-search"></i></span>
                         <input type="text" id="filter_query" class="form-control"
-                               placeholder="Type to live-filter table..." autocomplete="off">
+                               placeholder="Type to filter table..." autocomplete="off">
                     </div>
                 </div>
                 <div class="col-md-5">
-                    <label for="filter_status" class="form-label text-muted small mb-1">Filter Status</label>
                     <select id="filter_status" class="form-select">
-                        <option value="all" selected>All Records</option>
-                        <option value="active">Currently Out Only</option>
-                        <option value="returned">Returned Only</option>
+                        <option value="all" selected>Checked In and Out</option>
+                        <option value="active">Out Only</option>
+                        <option value="returned">In Only</option>
                     </select>
                 </div>
             </div>
