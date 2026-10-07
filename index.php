@@ -272,17 +272,19 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
             <!-- Filter Bar (Searches Asset # OR Name) -->
             <div class="row g-3 mb-4 align-items-end">
                 <div class="col-md-7">
+                    <label for="filter_query" class="form-label text-muted small mb-1">Search Asset or Name</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-search"></i></span>
                         <input type="text" id="filter_query" class="form-control"
-                               placeholder="Type to filter table..." autocomplete="off">
+                               placeholder="Type to live-filter table..." autocomplete="off">
                     </div>
                 </div>
                 <div class="col-md-5">
+                    <label for="filter_status" class="form-label text-muted small mb-1">Filter Status</label>
                     <select id="filter_status" class="form-select">
-                        <option value="all" selected>Devices In and Out</option>
-                        <option value="active">Out Only</option>
-                        <option value="returned">In Only</option>
+                        <option value="all" selected>All Records</option>
+                        <option value="active">Currently Out Only</option>
+                        <option value="returned">Returned Only</option>
                     </select>
                 </div>
             </div>
@@ -297,13 +299,12 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
                             <th>Check-Out Time</th>
                             <th>Check-In Time</th>
                             <th>Status</th>
-                            <th class="text-end">Quick Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($checkouts)): ?>
                             <tr id="emptyStaticRow">
-                                <td colspan="6" class="text-center py-4 text-muted">
+                                <td colspan="5" class="text-center py-4 text-muted">
                                     <i class="bi bi-inbox fs-3 d-block mb-1"></i>
                                     No records found in database.
                                 </td>
@@ -333,24 +334,11 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
                                             <span class="badge badge-returned px-2 py-1"><i class="bi bi-check-circle me-1"></i>Checked In</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="text-end">
-                                        <?php if ($isOut): ?>
-                                            <form method="POST" action="index.php" class="d-inline">
-                                                <input type="hidden" name="checkout_id" value="<?= (int)$row['id'] ?>">
-                                                <input type="hidden" name="asset_number" value="<?= htmlspecialchars($row['asset_number']) ?>">
-                                                <button type="submit" class="btn btn-sm btn-outline-success">
-                                                    Check In Now
-                                                </button>
-                                            </form>
-                                        <?php else: ?>
-                                            <span class="text-muted small">—</span>
-                                        <?php endif; ?>
-                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
                         <tr id="noResultsRow" style="display: none;">
-                            <td colspan="6" class="text-center py-4 text-muted">
+                            <td colspan="5" class="text-center py-4 text-muted">
                                 <i class="bi bi-search fs-3 d-block mb-1"></i>
                                 No matching records found.
                             </td>
