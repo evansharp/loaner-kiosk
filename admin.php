@@ -75,10 +75,10 @@ $now = time();
 foreach ($allRecords as $record) {
     $outTime = strtotime($record['checkout_time']);
     $inTime = $record['checkin_time'] ? strtotime($record['checkin_time']) : $now;
-    
+
     if ($outTime && $inTime && $inTime >= $outTime) {
         $duration = $inTime - $outTime;
-        
+
         // Device stats
         $asset = $record['asset_number'];
         if (!isset($deviceStats[$asset])) {
@@ -238,7 +238,7 @@ function formatDuration($seconds) {
             <div class="card admin-card">
                 <div class="card-body p-4">
                     <h5 class="card-title fw-bold mb-3"><i class="bi bi-table me-2 text-info"></i>All Activity Records & Management</h5>
-                    
+
                     <!-- Filter Toolbar -->
                     <div class="row g-3 mb-4">
                         <div class="col-md-3">
@@ -292,7 +292,7 @@ function formatDuration($seconds) {
                                             data-user="<?= htmlspecialchars(strtolower($record['user_name'])) ?>"
                                             data-dateout="<?= $checkoutDateOnly ?>"
                                             data-datein="<?= $checkinDateOnly ?>">
-                                            <td class="text-muted small">#<?= (int)$record['id'] ?></td>
+                                            <td class="text-muted small"><?= (int)$record['id'] ?></td>
                                             <td><span class="badge bg-light text-dark border font-monospace">#<?= htmlspecialchars($record['asset_number']) ?></span></td>
                                             <td class="fw-semibold"><?= htmlspecialchars($record['user_name']) ?></td>
                                             <td><small class="text-secondary"><?= htmlspecialchars($record['checkout_time']) ?></small></td>
@@ -305,8 +305,8 @@ function formatDuration($seconds) {
                                                 <?php endif; ?>
                                             </td>
                                             <td class="text-end">
-                                                <button type="button" class="btn btn-sm btn-outline-primary me-1" 
-                                                        data-bs-toggle="modal" 
+                                                <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                                                        data-bs-toggle="modal"
                                                         data-bs-target="#editModal"
                                                         data-id="<?= (int)$record['id'] ?>"
                                                         data-asset="<?= htmlspecialchars($record['asset_number']) ?>"
