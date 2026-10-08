@@ -1,2 +1,3 @@
 checkout_verification/*
 !checkout_verification
+chromebooks.sqlite
