@@ -151,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $month = date('m');
                         $day = date('d');
                         $dir = __DIR__ . "/checkout_verification/$year/$month/$day";
-                        
+
                         if (!is_dir($dir)) {
                             mkdir($dir, 0755, true);
                         }
@@ -202,7 +202,7 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Coast Mountain Academy — Chromebook Kiosk</title>
+    <title>Loaner Chromebook Kiosk</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
@@ -240,17 +240,13 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
         <div class="d-flex align-items-center gap-3">
             <img src="logo.png" alt="Coast Mountain Academy" class="brand-logo" onerror="this.style.display='none'">
             <div>
-                <h1 class="mb-0">Chromebook Self-Checkout</h1>
+                <h1 class="mb-0">Loaner Chromebook Checkout</h1>
             </div>
         </div>
         <div class="d-flex gap-2">
             <div class="text-center bg-white px-3 py-2 rounded border">
                 <span class="d-block h5 mb-0 fw-bold text-primary"><?= $currentlyOut ?></span>
                 <span class="small text-muted">Currently Out</span>
-            </div>
-            <div class="text-center bg-white px-3 py-2 rounded border">
-                <span class="d-block h5 mb-0 fw-bold text-secondary"><?= $totalCheckouts ?></span>
-                <span class="small text-muted">Total Logs</span>
             </div>
         </div>
     </div>
@@ -274,7 +270,7 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
                     <div class="input-group input-group-lg">
                         <span class="input-group-text"><i class="bi bi-qr-code-scan"></i></span>
                         <input type="text" class="form-control" id="asset_number" name="asset_number"
-                               placeholder="Scan tag or enter ID #" value="<?= htmlspecialchars($prefillAsset) ?>"
+                               placeholder="Scan tag or type asset #" value="<?= htmlspecialchars($prefillAsset) ?>"
                                autocomplete="off" required>
                     </div>
                 </div>
@@ -285,7 +281,7 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
                     <div class="input-group input-group-lg">
                         <span class="input-group-text"><i class="bi bi-person"></i></span>
                         <input type="text" class="form-control" id="user_name" name="user_name"
-                               placeholder="Student Name" value="<?= htmlspecialchars($prefillUser) ?>"
+                               placeholder="Type student name" value="<?= htmlspecialchars($prefillUser) ?>"
                                autocomplete="off">
                     </div>
                 </div>
@@ -301,7 +297,7 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
                     </button>
                 </div>
             </form>
-            
+
             <!-- Camera Preview (Hidden, used for capture) -->
             <video id="cameraPreview" autoplay playsinline style="display:none;"></video>
             <canvas id="photoCanvas" style="display:none;"></canvas>
@@ -311,7 +307,17 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
     <!-- History & Filtering Card -->
     <div class="card kiosk-card">
         <div class="card-body p-4">
-            <h3> Activity Log </h3>
+            <div class="row justify-content-between mb-3">
+                <div class="col-md-6 align-self-center">
+                    <h3> Activity Log </h3>
+                </div>
+                <div class="col-md-2">
+                    <div class="text-center bg-white px-3 py-2 rounded border">
+                        <span class="d-block h5 mb-0 fw-bold text-secondary"><?= $totalCheckouts ?></span>
+                        <span class="small text-muted">Total Logs</span>
+                    </div>
+                </div>
+            </div>
             <!-- Filter Bar (Searches Asset # OR Name) -->
             <div class="row g-3 mb-4 align-items-end">
                 <div class="col-md-7">
@@ -590,7 +596,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Only capture photo if user_name is being submitted (check-out)
         const userName = document.getElementById('user_name').value.trim();
         const assetNum = document.getElementById('asset_number').value.trim();
-        
+
         // We only want to capture if both are present (Checkout flow)
         if (userName !== '' && assetNum !== '') {
             // Prevent submission briefly to capture photo
@@ -601,13 +607,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 photoCanvas.width = cameraPreview.videoWidth;
                 photoCanvas.height = cameraPreview.videoHeight;
                 context.drawImage(cameraPreview, 0, 0, photoCanvas.width, photoCanvas.height);
-                
+
                 // Generate simple UUID
                 const uuid = crypto.randomUUID();
                 photoUuidInput.value = uuid;
                 photoBlobInput.value = photoCanvas.toDataURL('image/jpeg', 0.8);
             }
-            
+
             // Now submit the form
             kioskForm.submit();
         }

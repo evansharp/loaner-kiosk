@@ -144,7 +144,7 @@ function formatDuration($seconds) {
             <img src="logo.png" alt="Coast Mountain Academy" class="brand-logo" onerror="this.style.display='none'">
             <div>
                 <h1 class="h3 mb-0 fw-bold">Admin Dashboard & Analytics</h1>
-                <p class="text-muted small mb-0">Loaner Kiosk Management System</p>
+                <p class="text-muted small mb-0">Loaner Chromebook Tracking System</p>
             </div>
         </div>
         <div>
@@ -287,7 +287,7 @@ function formatDuration($seconds) {
                                             $isOut = is_null($record['checkin_time']);
                                             $checkoutDateOnly = date('Y-m-d', strtotime($record['checkout_time']));
                                             $checkinDateOnly = $record['checkin_time'] ? date('Y-m-d', strtotime($record['checkin_time'])) : '';
-                                            
+
                                             // Derive photo file path
                                             $photoUrl = null;
                                             if (!empty($record['photo_uuid'])) {
@@ -318,7 +318,7 @@ function formatDuration($seconds) {
                                             </td>
                                             <td class="text-end">
                                                 <?php if ($photoUrl): ?>
-                                                    <button type="button" class="btn btn-sm btn-outline-info me-1"
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary me-1"
                                                             data-bs-toggle="modal"
                                                             data-bs-target="#photoModal"
                                                             data-photo="<?= htmlspecialchars($photoUrl) ?>"
