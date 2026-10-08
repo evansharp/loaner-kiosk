@@ -115,7 +115,6 @@ sleep 1
 # -------------------------------------------------------------
 open -a "Google Chrome" --args \
   --kiosk \
-  --incognito \
   --disable-session-crashed-bubble \
   --no-first-run \
   "http://localhost:$PORT"
