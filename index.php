@@ -43,7 +43,8 @@ try {
         asset_number TEXT NOT NULL,
         user_name TEXT NOT NULL,
         checkout_time DATETIME NOT NULL,
-        checkin_time DATETIME DEFAULT NULL
+        checkin_time DATETIME DEFAULT NULL,
+        photo_uuid TEXT DEFAULT NULL
     )");
 
     // Ensure only one active checkout per asset number at a time
@@ -137,12 +138,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $prefillUser = $userName;
                     $focusTarget = "user_name";
                 } else {
+                    // Photo Handling
+                    $photoUuid = $_POST['photo_uuid'] ?? null;
+                    $photoBlob = $_POST['photo_blob'] ?? null;
+
+                    if ($photoUuid && $photoBlob) {
+                        $photoBlob = str_replace('data:image/jpeg;base64,', '', $photoBlob);
+                        $photoBlob = str_replace(' ', '+', $photoBlob);
+                        $data = base64_decode($photoBlob);
+
+                        $year = date('Y');
+                        $month = date('m');
+                        $day = date('d');
+                        $dir = __DIR__ . "/checkout_verification/$year/$month/$day";
+                        
+                        if (!is_dir($dir)) {
+                            mkdir($dir, 0755, true);
+                        }
+
+                        $filePath = "$dir/$photoUuid.jpg";
+                        file_put_contents($filePath, $data);
+                    }
+
                     // Name provided and valid -> Complete Check-Out
-                    $insertStmt = $pdo->prepare("INSERT INTO checkouts (asset_number, user_name, checkout_time) VALUES (:asset, :name, :time)");
+                    $insertStmt = $pdo->prepare("INSERT INTO checkouts (asset_number, user_name, checkout_time, photo_uuid) VALUES (:asset, :name, :time, :uuid)");
                     $insertStmt->execute([
                         ':asset' => $assetNumber,
                         ':name' => $userName,
-                        ':time' => date('Y-m-d H:i:s')
+                        ':time' => date('Y-m-d H:i:s'),
+                        ':uuid' => $photoUuid
                     ]);
 
                     $message = "<strong>CHECK-OUT SUCCESS!</strong> Chromebook <strong>#" . htmlspecialchars($assetNumber) . "</strong> assigned to <strong>" . htmlspecialchars($userName) . "</strong>.";
@@ -266,6 +290,9 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
                     </div>
                 </div>
 
+                <input type="hidden" name="photo_uuid" id="photo_uuid">
+                <input type="hidden" name="photo_blob" id="photo_blob">
+
                 <!-- Submit Button (Vertically Aligned) -->
                 <div class="col-md-2">
                     <label class="form-label fs-5 d-none d-md-block">&nbsp;</label>
@@ -274,6 +301,10 @@ $currentlyOut = $pdo->query("SELECT COUNT(*) FROM checkouts WHERE checkin_time I
                     </button>
                 </div>
             </form>
+            
+            <!-- Camera Preview (Hidden, used for capture) -->
+            <video id="cameraPreview" autoplay playsinline style="display:none;"></video>
+            <canvas id="photoCanvas" style="display:none;"></canvas>
         </div>
     </div>
 
@@ -534,6 +565,53 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Initialize timer on load
     resetInactivityTimer();
+
+    // --- Camera Handling & Photo Capture ---
+    const kioskForm = document.getElementById('kioskForm');
+    const cameraPreview = document.getElementById('cameraPreview');
+    const photoCanvas = document.getElementById('photoCanvas');
+    const photoUuidInput = document.getElementById('photo_uuid');
+    const photoBlobInput = document.getElementById('photo_blob');
+    let stream = null;
+
+    async function startCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            cameraPreview.srcObject = stream;
+        } catch (err) {
+            console.error("Camera access denied or unavailable:", err);
+        }
+    }
+
+    // Start camera immediately
+    startCamera();
+
+    kioskForm.addEventListener('submit', async (e) => {
+        // Only capture photo if user_name is being submitted (check-out)
+        const userName = document.getElementById('user_name').value.trim();
+        const assetNum = document.getElementById('asset_number').value.trim();
+        
+        // We only want to capture if both are present (Checkout flow)
+        if (userName !== '' && assetNum !== '') {
+            // Prevent submission briefly to capture photo
+            e.preventDefault();
+
+            if (stream) {
+                const context = photoCanvas.getContext('2d');
+                photoCanvas.width = cameraPreview.videoWidth;
+                photoCanvas.height = cameraPreview.videoHeight;
+                context.drawImage(cameraPreview, 0, 0, photoCanvas.width, photoCanvas.height);
+                
+                // Generate simple UUID
+                const uuid = crypto.randomUUID();
+                photoUuidInput.value = uuid;
+                photoBlobInput.value = photoCanvas.toDataURL('image/jpeg', 0.8);
+            }
+            
+            // Now submit the form
+            kioskForm.submit();
+        }
+    });
 });
 </script>
 </body>

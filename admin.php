@@ -287,6 +287,18 @@ function formatDuration($seconds) {
                                             $isOut = is_null($record['checkin_time']);
                                             $checkoutDateOnly = date('Y-m-d', strtotime($record['checkout_time']));
                                             $checkinDateOnly = $record['checkin_time'] ? date('Y-m-d', strtotime($record['checkin_time'])) : '';
+                                            
+                                            // Derive photo file path
+                                            $photoUrl = null;
+                                            if (!empty($record['photo_uuid'])) {
+                                                $year = date('Y', strtotime($record['checkout_time']));
+                                                $month = date('m', strtotime($record['checkout_time']));
+                                                $day = date('d', strtotime($record['checkout_time']));
+                                                $photoPath = "checkout_verification/$year/$month/$day/{$record['photo_uuid']}.jpg";
+                                                if (file_exists(__DIR__ . '/' . $photoPath)) {
+                                                    $photoUrl = $photoPath;
+                                                }
+                                            }
                                         ?>
                                         <tr data-asset="<?= htmlspecialchars(strtolower($record['asset_number'])) ?>"
                                             data-user="<?= htmlspecialchars(strtolower($record['user_name'])) ?>"
@@ -305,6 +317,16 @@ function formatDuration($seconds) {
                                                 <?php endif; ?>
                                             </td>
                                             <td class="text-end">
+                                                <?php if ($photoUrl): ?>
+                                                    <button type="button" class="btn btn-sm btn-outline-info me-1"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#photoModal"
+                                                            data-photo="<?= htmlspecialchars($photoUrl) ?>"
+                                                            data-user="<?= htmlspecialchars($record['user_name']) ?>"
+                                                            data-asset="<?= htmlspecialchars($record['asset_number']) ?>">
+                                                        <i class="bi bi-camera-fill"></i>
+                                                    </button>
+                                                <?php endif; ?>
                                                 <button type="button" class="btn btn-sm btn-outline-primary me-1"
                                                         data-bs-toggle="modal"
                                                         data-bs-target="#editModal"
@@ -370,10 +392,26 @@ function formatDuration($seconds) {
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn bg-secondary text-white" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary">Save Changes</button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Photo Verification Modal (1000px wide layout) -->
+<div class="modal fade" id="photoModal" tabindex="-1" aria-labelledby="photoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" style="max-width: 1040px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="photoModalLabel">Checkout Verification Photo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3 text-center bg-dark rounded-bottom">
+                <div class="mb-3 text-white small" id="photoMeta"></div>
+                <img id="verificationImage" src="" alt="Verification Photo" class="img-fluid rounded border border-secondary" style="max-width: 1000px; width: 100%; height: auto; object-fit: contain;">
+            </div>
+        </div>
     </div>
 </div>
 
@@ -515,6 +553,20 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById('editUserName').value = button.getAttribute('data-user');
             document.getElementById('editCheckoutTime').value = button.getAttribute('data-checkout');
             document.getElementById('editCheckinTime').value = button.getAttribute('data-checkin');
+        });
+    }
+
+    // --- Modal Populate for Photo View ---
+    const photoModal = document.getElementById('photoModal');
+    if (photoModal) {
+        photoModal.addEventListener('show.bs.modal', event => {
+            const button = event.relatedTarget;
+            const photoUrl = button.getAttribute('data-photo');
+            const user = button.getAttribute('data-user');
+            const asset = button.getAttribute('data-asset');
+
+            document.getElementById('verificationImage').src = photoUrl;
+            document.getElementById('photoMeta').innerHTML = `Assigned to: <strong>${user}</strong> &bull; Chromebook: <strong>#${asset}</strong>`;
         });
     }
 });

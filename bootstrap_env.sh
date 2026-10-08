@@ -128,7 +128,7 @@ while true; do
         echo "[$(date)] CRITICAL: PHP server dropped socket connection or crashed." >> "$LOG_FILE"
         echo "[$(date)] Attempting recovery bind step in 3 seconds..." >> "$LOG_FILE"
         sleep 3
-        
+
         lsof -ti :$PORT | xargs kill -9 2>/dev/null || true
         php -S localhost:$PORT >> "$LOG_FILE" 2>&1 &
         PHP_PID=$!
