@@ -1,6 +1,8 @@
 # loaner-kiosk
 A SPA to do self-serve signout of CMA loaner Chromebooks.
 
+THIS PROJECT WAS 100% GENERSATED BY GEMINI. 
+
 ## Features
 - **Ultra Lightweight Single-Page Architecture:** Instant actions, simple forms, and rapid-response client-side live filtering.
 - **Resilient MDM Deployment:** Partitioned scripts (`bootstrap_env.sh` and `run_at_login.sh`) optimized for macOS 10.15.7 via MDM or manual device installation.
