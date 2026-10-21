@@ -50,14 +50,27 @@ class CheckoutRepository
         ]);
     }
 
-    public function update(int $id, string $assetNumber, string $userName, string $checkoutTime, ?string $checkinTime): void
+    public function find(int $id): ?array
     {
-        $stmt = $this->pdo->prepare("UPDATE checkouts SET asset_number = :asset, user_name = :name, checkout_time = :checkout, checkin_time = :checkin WHERE id = :id");
+        $stmt = $this->pdo->prepare("SELECT * FROM checkouts WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch() ?: null;
+    }
+
+    /**
+     * @param string|null $userId    Google directory ID of the linked person (null = not linked)
+     * @param string|null $userEmail Their directory email
+     */
+    public function update(int $id, string $assetNumber, string $userName, string $checkoutTime, ?string $checkinTime, ?string $userId = null, ?string $userEmail = null): void
+    {
+        $stmt = $this->pdo->prepare("UPDATE checkouts SET asset_number = :asset, user_name = :name, checkout_time = :checkout, checkin_time = :checkin, user_id = :user_id, user_email = :user_email WHERE id = :id");
         $stmt->execute([
             ':asset' => $assetNumber,
             ':name' => $userName,
             ':checkout' => $checkoutTime,
             ':checkin' => $checkinTime,
+            ':user_id' => $userId,
+            ':user_email' => $userEmail,
             ':id' => $id
         ]);
     }

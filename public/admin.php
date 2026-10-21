@@ -37,7 +37,7 @@ $peopleRepository = new PeopleRepository($pdo);
 $photos = new PhotoStore(PHOTO_DIR, 'photo.php?f=');
 $notifier = new OverdueNotifier($repository, $settingsRepository);
 $directorySync = new DirectorySync($peopleRepository, $settingsRepository, SERVICE_ACCOUNT_KEY_FILE);
-$controller = new AdminController($repository, $settingsRepository, $notifier, $directorySync, SERVICE_ACCOUNT_KEY_FILE);
+$controller = new AdminController($repository, $peopleRepository, $settingsRepository, $notifier, $directorySync, SERVICE_ACCOUNT_KEY_FILE);
 
 // Handle Admin Actions (Delete / Edit / Settings)
 $alert = null;
@@ -60,7 +60,8 @@ $topUsers = $stats->topUsers(5);
 $notificationSettings = $controller->settingsDraft ?: NotificationSettings::load($settingsRepository);
 $lastNotification = $notifier->lastResult();
 
-// Google directory settings
+// Google directory settings (the edit form's name autocomplete follows the saved on/off switch)
+$directoryEnabled = DirectorySettings::load($settingsRepository)->enabled;
 $directorySettings = $controller->directoryDraft ?: DirectorySettings::load($settingsRepository);
 $lastDirectorySync = $directorySync->lastResult();
 $directoryPeopleCount = $peopleRepository->countActive();

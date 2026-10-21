@@ -10,8 +10,12 @@ try {
 
 $settingsRepository = new SettingsRepository($pdo);
 
-// Opening the kiosk view always ends any admin session in this shared browser
-(new AdminAuth($settingsRepository))->logout();
+// Opening the kiosk view always ends any admin session in this shared browser.
+// (Only for the kiosk page itself: some server setups answer unknown paths, like /favicon.ico, with this file.)
+$requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+if ($requestPath === '/' || $requestPath === '/index.php') {
+    (new AdminAuth($settingsRepository))->logout();
+}
 
 $repository = new CheckoutRepository($pdo);
 $directory = DirectorySettings::load($settingsRepository);

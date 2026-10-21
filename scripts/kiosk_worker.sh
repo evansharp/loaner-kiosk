@@ -15,9 +15,9 @@ LOG_FILE="$HOME/Library/Logs/php_kiosk_server.log"
 mkdir -p "$(dirname "$LOG_FILE")"
 cd "$PROJECT_DIR"
 
-# Only public/ is served; the database, photos and Google key in private/ are not
+# router.php serves only public/; the database, photos and Google key in private/ are not
 start_server() {
-    php -S localhost:$PORT -t "$PROJECT_DIR/public" >> "$LOG_FILE" 2>&1 &
+    php -S localhost:$PORT -t "$PROJECT_DIR" "$PROJECT_DIR/router.php" >> "$LOG_FILE" 2>&1 &
     PHP_PID=$!
 }
 

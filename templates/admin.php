@@ -10,6 +10,7 @@
  * @var string      $csrfToken    Included in every form; checked by public/admin.php
  * @var NotificationSettings $notificationSettings
  * @var array|null  $lastNotification  ['message', 'at', 'ok'] from OverdueNotifier::lastResult()
+ * @var bool        $directoryEnabled  Whether the edit form suggests directory names
  * @var DirectorySettings $directorySettings
  * @var array|null  $lastDirectorySync ['message', 'at', 'ok'] from DirectorySync::lastResult()
  * @var int         $directoryPeopleCount
@@ -36,8 +37,9 @@ foreach ($deviceStats as $asset => $seconds) {
     <!-- D3.js -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link rel="stylesheet" href="assets/css/admin.css">
+    <link rel="stylesheet" href="assets/css/name-autocomplete.css">
 </head>
-<body data-idle-timeout="<?= AdminAuth::IDLE_TIMEOUT ?>">
+<body data-idle-timeout="<?= AdminAuth::IDLE_TIMEOUT ?>" data-directory="<?= $directoryEnabled ? 'on' : 'off' ?>">
 
 <div class="container py-4" style="max-width: 1200px;">
     <!-- Top Header -->
@@ -229,6 +231,8 @@ foreach ($deviceStats as $asset => $seconds) {
                                                         data-id="<?= (int)$record['id'] ?>"
                                                         data-asset="<?= htmlspecialchars($record['asset_number']) ?>"
                                                         data-user="<?= htmlspecialchars($record['user_name']) ?>"
+                                                        data-user-id="<?= htmlspecialchars($record['user_id'] ?? '') ?>"
+                                                        data-user-email="<?= htmlspecialchars($record['user_email'] ?? '') ?>"
                                                         data-checkout="<?= htmlspecialchars($record['checkout_time']) ?>"
                                                         data-checkin="<?= htmlspecialchars($record['checkin_time'] ?? '') ?>">
                                                     <i class="bi bi-pencil"></i>
@@ -494,7 +498,16 @@ foreach ($deviceStats as $asset => $seconds) {
                 </div>
                 <div class="mb-3">
                     <label for="editUserName" class="form-label fw-semibold">Person's Name</label>
-                    <input type="text" class="form-control" id="editUserName" name="user_name" required>
+                    <div class="position-relative">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person" id="editUserIcon"></i></span>
+                            <input type="text" class="form-control" id="editUserName" name="user_name" required autocomplete="off">
+                        </div>
+                        <!-- Directory name suggestions (filled by name-autocomplete.js) -->
+                        <ul id="editUserSuggestions" class="dropdown-menu w-100 user-suggestions" role="listbox"></ul>
+                    </div>
+                    <input type="hidden" name="user_id" id="editUserId">
+                    <div class="form-text" id="editUserLink"></div>
                 </div>
                 <div class="mb-3">
                     <label for="editCheckoutTime" class="form-label fw-semibold">Check-Out Time</label>
@@ -533,6 +546,7 @@ foreach ($deviceStats as $asset => $seconds) {
 
 <!-- Bootstrap 5 JS Bundle -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/js/name-autocomplete.js"></script>
 <script src="assets/js/admin.js"></script>
 </body>
 </html>

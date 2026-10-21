@@ -12,6 +12,9 @@ class AdminController
     /** @var CheckoutRepository */
     private $checkouts;
 
+    /** @var PeopleRepository */
+    private $people;
+
     /** @var SettingsRepository */
     private $settings;
 
@@ -30,9 +33,10 @@ class AdminController
     /** @var DirectorySettings|null Submitted directory settings that failed validation, to redisplay unsaved */
     public $directoryDraft = null;
 
-    public function __construct(CheckoutRepository $checkouts, SettingsRepository $settings, OverdueNotifier $notifier, DirectorySync $directorySync, string $keyFile)
+    public function __construct(CheckoutRepository $checkouts, PeopleRepository $people, SettingsRepository $settings, OverdueNotifier $notifier, DirectorySync $directorySync, string $keyFile)
     {
         $this->checkouts = $checkouts;
+        $this->people = $people;
         $this->settings = $settings;
         $this->notifier = $notifier;
         $this->directorySync = $directorySync;
@@ -62,7 +66,8 @@ class AdminController
             $checkinTime = ($checkinTime === '') ? null : $checkinTime;
 
             if ($id > 0 && !empty($assetNumber) && !empty($userName) && !empty($checkoutTime)) {
-                $this->checkouts->update($id, $assetNumber, $userName, $checkoutTime, $checkinTime);
+                list($userId, $userEmail) = $this->resolveEditedLink($id, trim((string)($post['user_id'] ?? '')));
+                $this->checkouts->update($id, $assetNumber, $userName, $checkoutTime, $checkinTime, $userId, $userEmail);
                 return new Alert("Record #$id successfully updated.", "success");
             }
             return new Alert("Error: Asset number, user name, and check-out time are required.", "danger");
@@ -78,6 +83,30 @@ class AdminController
         }
 
         return null;
+    }
+
+    /**
+     * The directory link to save with an edited record. The edit form submits the linked
+     * person's ID; it's cleared in the browser as soon as the name is edited by hand, so
+     * any typed name is saved unlinked.
+     *
+     * @return array [user_id, user_email], both null when unlinked
+     */
+    private function resolveEditedLink(int $recordId, string $userId): array
+    {
+        if ($userId === '') {
+            return [null, null];
+        }
+
+        // Unchanged link: keep the email recorded at checkout
+        $record = $this->checkouts->find($recordId);
+        if ($record && $record['user_id'] === $userId) {
+            return [$record['user_id'], $record['user_email']];
+        }
+
+        // Re-linked to someone picked from the directory (active or former)
+        $person = $this->people->find($userId);
+        return $person ? [$person['google_id'], $person['email']] : [null, null];
     }
 
     /**

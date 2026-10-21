@@ -139,13 +139,63 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- Modal Populate for Editing ---
     const editModal = document.getElementById('editModal');
     if (editModal) {
+        const editUserName = document.getElementById('editUserName');
+        const editUserId = document.getElementById('editUserId');
+        const editUserIcon = document.getElementById('editUserIcon');
+        const editUserLink = document.getElementById('editUserLink');
+
+        // Says which directory person (if any) the record will be saved as linked to
+        function showLink(email) {
+            editUserLink.replaceChildren();
+            if (email) {
+                const strong = document.createElement('strong');
+                strong.textContent = email;
+                editUserLink.append('Linked to ', strong, ' in the Google directory.');
+            } else {
+                editUserLink.textContent = document.body.dataset.directory === 'on'
+                    ? 'Not linked. Start typing to choose someone from the directory, or enter any name.'
+                    : 'Not linked to the Google directory.';
+            }
+        }
+
+        let nameAutocomplete = null;
+        if (document.body.dataset.directory === 'on') {
+            nameAutocomplete = setupNameAutocomplete({
+                input: editUserName,
+                userIdInput: editUserId,
+                list: document.getElementById('editUserSuggestions'),
+                icon: editUserIcon,
+                allowTyped: true,
+                includeInactive: true, // Old records may belong to people who have since left
+                onLinkChange: person => showLink(person ? person.email : null)
+            });
+        } else {
+            // No suggestions, but a hand-edited name must still drop the old link
+            editUserName.addEventListener('input', () => {
+                if (editUserId.value !== '') {
+                    editUserId.value = '';
+                    editUserIcon.className = 'bi bi-person';
+                    showLink(null);
+                }
+            });
+        }
+
         editModal.addEventListener('show.bs.modal', event => {
             const button = event.relatedTarget;
             document.getElementById('editRecordId').value = button.getAttribute('data-id');
             document.getElementById('editAssetNumber').value = button.getAttribute('data-asset');
-            document.getElementById('editUserName').value = button.getAttribute('data-user');
+            editUserName.value = button.getAttribute('data-user');
+            editUserId.value = button.getAttribute('data-user-id');
             document.getElementById('editCheckoutTime').value = button.getAttribute('data-checkout');
             document.getElementById('editCheckinTime').value = button.getAttribute('data-checkin');
+
+            const linked = editUserId.value !== '';
+            if (nameAutocomplete) {
+                nameAutocomplete.markLinked(linked);
+            } else {
+                editUserIcon.className = linked ? 'bi bi-person-check-fill text-success' : 'bi bi-person';
+            }
+            showLink(linked ? button.getAttribute('data-user-email') : null);
         });
     }
 

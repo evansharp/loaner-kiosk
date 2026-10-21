@@ -40,7 +40,7 @@ We break apart the kiosk lifecycle into two lightweight, robust scripts to work 
 ### 1. Initial Setup: `bootstrap_env.sh`
 This script is executed **once** by the MDM agent with a long timeout to prepare a new terminal device.
 - **Actions:** Verifies Xcode Command Line Tools, ensures directories are established, clones/updates the project repository inside `~/Sites`, constructs the login launcher script (`~/setup_and_launch.sh`), and registers the LaunchAgent `.plist` in the user domain.
-- At each login, `~/setup_and_launch.sh` pulls the latest code and hands off to `scripts/kiosk_worker.sh` in the repo, which runs the PHP server (serving only `public/`), opens Chrome, revives the server if it crashes, and runs the background jobs every 5 minutes. Changes to the worker arrive with `git pull`.
+- At each login, `~/setup_and_launch.sh` pulls the latest code and hands off to `scripts/kiosk_worker.sh` in the repo, which runs the PHP server (`router.php`, serving only `public/`), opens Chrome, revives the server if it crashes, and runs the background jobs every 5 minutes. Changes to the worker arrive with `git pull`.
 - **Kiosks bootstrapped before `public/` existed** still run `php -S` from the repo root. The root `index.php` routes their requests into `public/` so they keep working, but **re-run `bootstrap_env.sh` on them** to stop serving the rest of the repo (including `private/`) and to get the background jobs.
 - **Execution (MDM Run-Once Command):**
   ```bash
@@ -75,7 +75,7 @@ If you are running the kiosk manually on a machine:
    - **Kiosk Interface:** `http://localhost:8080`
    - **Admin Analytics Panel:** `http://localhost:8080/admin.php`
 
-Without the scripts, run `php -S localhost:8080 -t public` from the repo. Under Apache, the root `.htaccess` serves only `public/`.
+Without the scripts, run `php -S localhost:8080 router.php` from the repo root (the router serves only `public/`). Under Apache, the root `.htaccess` does the same.
 
 ### Admin Login
 - The admin page logs out after 10 minutes without activity (returning to the kiosk), whenever the kiosk page is opened, and from **Open Kiosk View**.

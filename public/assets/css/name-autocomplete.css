@@ -1,0 +1,4 @@
+/* Directory name suggestions under a name field (see name-autocomplete.js) */
+.user-suggestions { top: 100%; left: 0; max-height: 360px; overflow-y: auto; }
+.user-suggestions .dropdown-item { cursor: pointer; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.user-suggestions .dropdown-item.active .text-muted { color: rgba(255, 255, 255, 0.8) !important; }

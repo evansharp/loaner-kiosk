@@ -14,12 +14,13 @@ class PeopleRepository
     }
 
     /**
-     * Active people whose name or email contains every word of the query.
-     * Names starting with the query come first.
+     * People whose name or email contains every word of the query.
+     * Active people come first, then names starting with the query.
      *
-     * @return array[] ['id' => google_id, 'name' => ..., 'email' => ...]
+     * @param bool $includeInactive Also return people no longer in the synced org units (for admins)
+     * @return array[] ['id' => google_id, 'name' => ..., 'email' => ..., 'active' => bool]
      */
-    public function search(string $query, int $limit): array
+    public function search(string $query, int $limit, bool $includeInactive = false): array
     {
         $words = array_slice(preg_split('/\s+/', trim($query), -1, PREG_SPLIT_NO_EMPTY), 0, 5);
         if (empty($words)) {
@@ -33,14 +34,32 @@ class PeopleRepository
             $params[":w$i"] = '%' . self::likeEscape($word) . '%';
         }
 
+        if (!$includeInactive) {
+            $conditions[] = 'active = 1';
+        }
+
         $stmt = $this->pdo->prepare(
-            "SELECT google_id AS id, name, email FROM people
-             WHERE active = 1 AND " . implode(' AND ', $conditions) . "
-             ORDER BY CASE WHEN name LIKE :prefix ESCAPE '\\' THEN 0 ELSE 1 END, name
+            "SELECT google_id AS id, name, email, active FROM people
+             WHERE " . implode(' AND ', $conditions) . "
+             ORDER BY active DESC, CASE WHEN name LIKE :prefix ESCAPE '\\' THEN 0 ELSE 1 END, name
              LIMIT " . (int)$limit
         );
         $stmt->execute($params);
-        return $stmt->fetchAll();
+
+        return array_map(function (array $person): array {
+            $person['active'] = (bool)$person['active'];
+            return $person;
+        }, $stmt->fetchAll());
+    }
+
+    /**
+     * A synced person, active or not.
+     */
+    public function find(string $googleId): ?array
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM people WHERE google_id = :id");
+        $stmt->execute([':id' => $googleId]);
+        return $stmt->fetch() ?: null;
     }
 
     public function findActive(string $googleId): ?array

@@ -1,5 +1,6 @@
 <?php
-// Name autocomplete for the kiosk: active directory people matching ?q=
+// Name autocomplete: directory people matching ?q=
+// Active people only, unless a logged-in admin asks for former ones too (&include_inactive=1)
 require dirname(__DIR__) . '/src/bootstrap.php';
 
 header('Content-Type: application/json; charset=utf-8');
@@ -15,9 +16,12 @@ try {
     exit;
 }
 
-if (!DirectorySettings::load(new SettingsRepository($pdo))->enabled || strlen($query) < 2) {
+$settingsRepository = new SettingsRepository($pdo);
+if (!DirectorySettings::load($settingsRepository)->enabled || strlen($query) < 2) {
     echo '[]';
     exit;
 }
 
-echo json_encode((new PeopleRepository($pdo))->search($query, 8), JSON_UNESCAPED_UNICODE);
+$includeInactive = !empty($_GET['include_inactive']) && (new AdminAuth($settingsRepository))->check();
+
+echo json_encode((new PeopleRepository($pdo))->search($query, 8, $includeInactive), JSON_UNESCAPED_UNICODE);
