@@ -1,0 +1,22 @@
+body { background-color: #f4f6f9; }
+.kiosk-card { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: all 0.3s ease; }
+.brand-logo { max-height: 55px; width: auto; object-fit: contain; }
+.badge-active { background-color: #ffc107; color: #000; }
+.badge-returned { background-color: #198754; }
+
+/* Keyframe Flash Animations for Visual Confirmation */
+@keyframes flashSuccess {
+    0% { background-color: #d1e7dd; box-shadow: 0 0 20px rgba(25, 135, 84, 0.4); }
+    100% { background-color: #ffffff; }
+}
+@keyframes flashWarning {
+    0% { background-color: #fff3cd; box-shadow: 0 0 20px rgba(255, 193, 7, 0.4); }
+    100% { background-color: #ffffff; }
+}
+@keyframes flashDanger {
+    0% { background-color: #f8d7da; box-shadow: 0 0 20px rgba(220, 53, 69, 0.4); }
+    100% { background-color: #ffffff; }
+}
+.flash-success { animation: flashSuccess 1.2s ease-out; }
+.flash-warning { animation: flashWarning 1.2s ease-out; }
+.flash-danger { animation: flashDanger 1.2s ease-out; }
