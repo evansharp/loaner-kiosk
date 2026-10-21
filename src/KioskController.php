@@ -6,10 +6,16 @@
  */
 class KioskController
 {
-    public function __construct(
-        private CheckoutRepository $checkouts,
-        private PhotoStore $photos
-    ) {
+    /** @var CheckoutRepository */
+    private $checkouts;
+
+    /** @var PhotoStore */
+    private $photos;
+
+    public function __construct(CheckoutRepository $checkouts, PhotoStore $photos)
+    {
+        $this->checkouts = $checkouts;
+        $this->photos = $photos;
     }
 
     public function handlePost(array $post): KioskState

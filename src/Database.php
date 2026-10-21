@@ -24,6 +24,12 @@ class Database
         // Ensure only one active checkout per asset number at a time
         $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_single_active_asset ON checkouts(asset_number) WHERE checkin_time IS NULL");
 
+        // Key/value store for admin settings (e.g. overdue email notifications)
+        $pdo->exec("CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )");
+
         return $pdo;
     }
 }

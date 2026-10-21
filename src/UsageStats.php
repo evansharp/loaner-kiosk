@@ -6,10 +6,10 @@
 class UsageStats
 {
     /** @var array<string, int> asset_number => total_seconds, sorted descending */
-    public array $deviceSeconds = [];
+    public $deviceSeconds = [];
 
     /** @var array<string, int> user_name => total_seconds, sorted descending */
-    public array $userSeconds = [];
+    public $userSeconds = [];
 
     /**
      * @param array $records Checkout rows; active checkouts count up to $now

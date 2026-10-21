@@ -5,8 +5,12 @@
  */
 class CheckoutRepository
 {
-    public function __construct(private PDO $pdo)
+    /** @var PDO */
+    private $pdo;
+
+    public function __construct(PDO $pdo)
     {
+        $this->pdo = $pdo;
     }
 
     public function findActiveByAsset(string $assetNumber): ?array
@@ -63,6 +67,14 @@ class CheckoutRepository
         $stmt = $this->pdo->prepare("SELECT * FROM checkouts ORDER BY id DESC");
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    /**
+     * Devices currently checked out, oldest checkout first.
+     */
+    public function active(): array
+    {
+        return $this->pdo->query("SELECT * FROM checkouts WHERE checkin_time IS NULL ORDER BY checkout_time ASC")->fetchAll();
     }
 
     public function allByCheckoutTime(): array

@@ -5,14 +5,15 @@
  */
 class KioskState
 {
-    public ?string $message = null;
-    public ?string $messageType = null; // success, warning, danger
-    public ?string $soundType = null;   // success, warning, error
-    public ?string $flashClass = null;  // flash-success, flash-warning, flash-danger
-    public string $prefillAsset = '';
-    public string $prefillUser = '';
-    public string $focusTarget = 'asset_number'; // Input ID to focus on load
-    public bool $autoReset = false;              // Trigger auto-reset timer in JS
+    // (Untyped properties: kiosks run macOS Catalina's built-in PHP 7.3)
+    public $message = null;
+    public $messageType = null; // success, warning, danger
+    public $soundType = null;   // success, warning, error
+    public $flashClass = null;  // flash-success, flash-warning, flash-danger
+    public $prefillAsset = '';
+    public $prefillUser = '';
+    public $focusTarget = 'asset_number'; // Input ID to focus on load
+    public $autoReset = false;            // Trigger auto-reset timer in JS
 
     public function success(string $message): void
     {

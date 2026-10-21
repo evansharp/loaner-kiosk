@@ -5,12 +5,16 @@
  */
 class PhotoStore
 {
-    /**
-     * @param string $baseDir Absolute directory photos are stored in
-     * @param string $baseUrl Same directory, relative to the web root
-     */
-    public function __construct(private string $baseDir, private string $baseUrl)
+    /** @var string Absolute directory photos are stored in */
+    private $baseDir;
+
+    /** @var string Same directory, relative to the web root */
+    private $baseUrl;
+
+    public function __construct(string $baseDir, string $baseUrl)
     {
+        $this->baseDir = $baseDir;
+        $this->baseUrl = $baseUrl;
     }
 
     public function save(string $uuid, string $dataUrl): void

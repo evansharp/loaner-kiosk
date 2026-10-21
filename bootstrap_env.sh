@@ -121,8 +121,16 @@ open -a "Google Chrome" --args \
 
 # -------------------------------------------------------------
 # 3. INFINITE WATCH & RECOVERY LOOP (Logs crash/uptime analytics)
+#    Also runs the overdue-device email check every ~5 minutes
+#    (60 x 5s); the checker itself sends at most once per day.
 # -------------------------------------------------------------
+TICKS=0
 while true; do
+    if [ $((TICKS % 60)) -eq 0 ]; then
+        php "$PROJECT_DIR/bin/notify_overdue.php" >> "$LOG_FILE" 2>&1 &
+    fi
+    TICKS=$((TICKS + 1))
+
     if ! kill -0 $PHP_PID 2>/dev/null; then
         echo "[$(date)] CRITICAL: PHP server dropped socket connection or crashed." >> "$LOG_FILE"
         echo "[$(date)] Attempting recovery bind step in 3 seconds..." >> "$LOG_FILE"

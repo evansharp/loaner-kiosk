@@ -7,6 +7,8 @@
  * @var array       $deviceStats  asset_number => total_seconds
  * @var array       $topUsers     user_name => total_seconds
  * @var PhotoStore  $photos
+ * @var NotificationSettings $notificationSettings
+ * @var array|null  $lastNotification  ['message', 'at', 'ok'] from OverdueNotifier::lastResult()
  */
 
 // Chart data for assets/js/admin.js
@@ -49,7 +51,7 @@ foreach ($deviceStats as $asset => $seconds) {
     </div>
 
     <!-- Alert Message -->
-    <?php if ($alert): ?>
+    <?php if ($alert && $alert->section === 'page'): ?>
         <div class="alert alert-<?= $alert->type ?> alert-dismissible fade show admin-card mb-4" role="alert">
             <?= htmlspecialchars($alert->message) ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -237,6 +239,128 @@ foreach ($deviceStats as $asset => $seconds) {
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 4: Overdue Email Notification Settings -->
+    <div class="row g-4 mt-0" id="notificationSettings">
+        <div class="col-12">
+            <div class="card admin-card">
+                <div class="card-body p-4">
+                    <h5 class="card-title fw-bold mb-3"><i class="bi bi-envelope-fill me-2 text-danger"></i>Overdue Email Notifications</h5>
+
+                    <?php if ($alert && $alert->section === 'settings'): ?>
+                        <div class="alert alert-<?= $alert->type ?> alert-dismissible fade show mb-4" role="alert">
+                            <?= htmlspecialchars($alert->message) ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    <?php endif; ?>
+
+                    <form method="POST" action="admin.php#notificationSettings">
+                        <div class="row g-4">
+                            <!-- When & who to notify -->
+                            <div class="col-lg-5">
+                                <h6 class="settings-heading">Schedule &amp; Recipients</h6>
+
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="notifyEnabled" name="notify_enabled" value="1" <?= $notificationSettings->enabled ? 'checked' : '' ?>>
+                                    <label class="form-check-label fw-semibold" for="notifyEnabled">Send a daily email about overdue devices</label>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="notifyTime" class="form-label fw-semibold">Notify At</label>
+                                    <input type="time" class="form-control" id="notifyTime" name="notify_time" value="<?= htmlspecialchars($notificationSettings->notifyTime) ?>" required>
+                                    <div class="form-text">Devices still checked out at this time each day are reported. The kiosk checks every 5 minutes.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="notifyRecipients" class="form-label fw-semibold">Recipients</label>
+                                    <input type="text" class="form-control" id="notifyRecipients" name="notify_recipients" value="<?= htmlspecialchars($notificationSettings->recipients) ?>" placeholder="it@example.org, office@example.org" autocomplete="off">
+                                    <div class="form-text">Comma-separated email addresses.</div>
+                                </div>
+
+                                <div class="small p-3 rounded border bg-light">
+                                    <span class="fw-semibold">Last check:</span>
+                                    <?php if ($lastNotification): ?>
+                                        <?= htmlspecialchars(date('M j, Y — g:i A', strtotime($lastNotification['at']))) ?><br>
+                                        <span class="<?= $lastNotification['ok'] ? 'text-success' : 'text-danger' ?>"><?= htmlspecialchars($lastNotification['message']) ?></span>
+                                    <?php else: ?>
+                                        <span class="text-muted">Never run.</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+
+                            <!-- Google SMTP relay connection -->
+                            <div class="col-lg-7">
+                                <h6 class="settings-heading">Google SMTP Relay</h6>
+
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="smtpHost" class="form-label fw-semibold">SMTP Host</label>
+                                        <input type="text" class="form-control" id="smtpHost" name="smtp_host" value="<?= htmlspecialchars($notificationSettings->smtpHost) ?>" placeholder="smtp-relay.gmail.com" autocomplete="off">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="smtpPort" class="form-label fw-semibold">Port</label>
+                                        <input type="number" class="form-control" id="smtpPort" name="smtp_port" value="<?= (int)$notificationSettings->smtpPort ?>" min="1" max="65535">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="smtpEncryption" class="form-label fw-semibold">Encryption</label>
+                                        <select class="form-select" id="smtpEncryption" name="smtp_encryption">
+                                            <?php foreach (NotificationSettings::ENCRYPTION_OPTIONS as $value => $label): ?>
+                                                <option value="<?= $value ?>" <?= $notificationSettings->smtpEncryption === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="mailFromAddress" class="form-label fw-semibold">From Address</label>
+                                        <input type="email" class="form-control" id="mailFromAddress" name="mail_from_address" value="<?= htmlspecialchars($notificationSettings->fromAddress) ?>" placeholder="kiosk@example.org" autocomplete="off">
+                                        <div class="form-text">Must be an address in your Google Workspace domain.</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="mailFromName" class="form-label fw-semibold">From Name</label>
+                                        <input type="text" class="form-control" id="mailFromName" name="mail_from_name" value="<?= htmlspecialchars($notificationSettings->fromName) ?>" autocomplete="off">
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="smtpUsername" class="form-label fw-semibold">Username <span class="text-muted fw-normal">(optional)</span></label>
+                                        <input type="text" class="form-control" id="smtpUsername" name="smtp_username" value="<?= htmlspecialchars($notificationSettings->smtpUsername) ?>" placeholder="Blank for IP address authentication" autocomplete="off">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="smtpPassword" class="form-label fw-semibold">Password <span class="text-muted fw-normal">(optional)</span></label>
+                                        <input type="password" class="form-control" id="smtpPassword" name="smtp_password" value="" placeholder="<?= $notificationSettings->smtpPassword !== '' ? 'Saved — leave blank to keep' : 'Blank for IP address authentication' ?>" autocomplete="new-password">
+                                        <?php if ($notificationSettings->smtpPassword !== ''): ?>
+                                            <div class="form-check mt-1">
+                                                <input class="form-check-input" type="checkbox" id="smtpPasswordClear" name="smtp_password_clear" value="1">
+                                                <label class="form-check-label small" for="smtpPasswordClear">Remove saved password</label>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="smtpHelo" class="form-label fw-semibold">EHLO Domain <span class="text-muted fw-normal">(optional)</span></label>
+                                        <input type="text" class="form-control" id="smtpHelo" name="smtp_helo" value="<?= htmlspecialchars($notificationSettings->smtpHelo) ?>" placeholder="Defaults to the From address's domain" autocomplete="off">
+                                    </div>
+                                </div>
+
+                                <div class="form-text mt-3">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Set up the relay in the Google Admin console under <strong>Apps → Google Workspace → Gmail → Routing → SMTP relay service</strong>.
+                                    If the relay allows this kiosk's public IP address, leave the username and password blank.
+                                    If it requires SMTP authentication, enter a Workspace account's address and password (or an app password if it uses 2-Step Verification).
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                            <button type="submit" name="action" value="test_email" class="btn btn-outline-primary">
+                                <i class="bi bi-send me-1"></i> Save &amp; Send Test Email
+                            </button>
+                            <button type="submit" name="action" value="save_settings" class="btn btn-primary">
+                                Save Settings
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

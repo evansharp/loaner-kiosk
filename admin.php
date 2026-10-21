@@ -8,10 +8,12 @@ try {
 }
 
 $repository = new CheckoutRepository($pdo);
+$settingsRepository = new SettingsRepository($pdo);
 $photos = new PhotoStore(APP_ROOT . '/checkout_verification', 'checkout_verification');
-$controller = new AdminController($repository);
+$notifier = new OverdueNotifier($repository, $settingsRepository);
+$controller = new AdminController($repository, $settingsRepository, $notifier);
 
-// Handle Admin Actions (Delete / Edit)
+// Handle Admin Actions (Delete / Edit / Settings)
 $alert = $_SERVER['REQUEST_METHOD'] === 'POST'
     ? $controller->handlePost($_POST)
     : null;
@@ -23,5 +25,9 @@ $allRecords = $repository->allByCheckoutTime();
 $stats = new UsageStats($allRecords, time());
 $deviceStats = $stats->deviceSeconds;
 $topUsers = $stats->topUsers(5);
+
+// Overdue notification settings (unsaved values are redisplayed if they failed validation)
+$notificationSettings = $controller->settingsDraft ?: NotificationSettings::load($settingsRepository);
+$lastNotification = $notifier->lastResult();
 
 require __DIR__ . '/templates/admin.php';
