@@ -3,7 +3,7 @@
 /**
  * Overdue email notification + SMTP relay settings, as configured on the admin page.
  */
-class NotificationSettings
+class NotificationSettings extends SettingsGroup
 {
     const ENCRYPTION_OPTIONS = [
         'tls' => 'STARTTLS (port 587)',
@@ -38,55 +38,22 @@ class NotificationSettings
     public $fromAddress = '';
     public $fromName = 'Loaner Chromebook Kiosk';
 
-    public static function load(SettingsRepository $repository): self
-    {
-        $settings = new self();
-        $stored = $repository->all();
-
-        foreach (self::KEYS as $property => $key) {
-            if (isset($stored[$key])) {
-                $settings->$property = $stored[$key];
-            }
-        }
-
-        $settings->enabled = (bool)$settings->enabled;
-        $settings->smtpPort = (int)$settings->smtpPort;
-
-        return $settings;
-    }
-
-    public function save(SettingsRepository $repository): void
-    {
-        $values = [];
-        foreach (self::KEYS as $property => $key) {
-            $values[$key] = (string)$this->$property;
-        }
-        $values[self::KEYS['enabled']] = $this->enabled ? '1' : '0';
-
-        $repository->setMany($values);
-    }
-
     /**
      * Applies submitted admin form values.
      * A blank password keeps the saved one, unless smtp_password_clear is checked.
      */
     public function applyPost(array $post): void
     {
-        // Single-line values only: line breaks could inject extra SMTP headers
-        $field = function (string $name) use ($post): string {
-            return trim(str_replace(["\r", "\n"], '', (string)($post[$name] ?? '')));
-        };
-
         $this->enabled = !empty($post['notify_enabled']);
-        $this->notifyTime = substr($field('notify_time'), 0, 5); // Drop seconds if the browser sends them
-        $this->recipients = implode(', ', self::splitList($field('notify_recipients')));
-        $this->smtpHost = $field('smtp_host');
-        $this->smtpPort = (int)$field('smtp_port');
-        $this->smtpEncryption = $field('smtp_encryption');
-        $this->smtpHelo = $field('smtp_helo');
-        $this->smtpUsername = $field('smtp_username');
-        $this->fromAddress = $field('mail_from_address');
-        $this->fromName = $field('mail_from_name');
+        $this->notifyTime = substr(self::postedLine($post, 'notify_time'), 0, 5); // Drop seconds if the browser sends them
+        $this->recipients = implode(', ', self::splitList(self::postedLine($post, 'notify_recipients')));
+        $this->smtpHost = self::postedLine($post, 'smtp_host');
+        $this->smtpPort = (int)self::postedLine($post, 'smtp_port');
+        $this->smtpEncryption = self::postedLine($post, 'smtp_encryption');
+        $this->smtpHelo = self::postedLine($post, 'smtp_helo');
+        $this->smtpUsername = self::postedLine($post, 'smtp_username');
+        $this->fromAddress = self::postedLine($post, 'mail_from_address');
+        $this->fromName = self::postedLine($post, 'mail_from_name');
 
         if (!empty($post['smtp_password_clear'])) {
             $this->smtpPassword = '';

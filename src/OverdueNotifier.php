@@ -7,11 +7,8 @@
  */
 class OverdueNotifier
 {
-    // Settings table keys recording the most recent run
-    const LAST_RUN_DATE = 'notify_last_run_date'; // Day the daily check completed (Y-m-d)
-    const LAST_RESULT = 'notify_last_result';
-    const LAST_RESULT_AT = 'notify_last_result_at';
-    const LAST_RESULT_OK = 'notify_last_result_ok';
+    // Settings table key for the day the daily check completed (Y-m-d)
+    const LAST_RUN_DATE = 'notify_last_run_date';
 
     /** @var CheckoutRepository */
     private $checkouts;
@@ -19,10 +16,14 @@ class OverdueNotifier
     /** @var SettingsRepository */
     private $settings;
 
+    /** @var JobStatus */
+    private $status;
+
     public function __construct(CheckoutRepository $checkouts, SettingsRepository $settings)
     {
         $this->checkouts = $checkouts;
         $this->settings = $settings;
+        $this->status = new JobStatus($settings, 'notify');
     }
 
     /**
@@ -95,15 +96,7 @@ class OverdueNotifier
      */
     public function lastResult(): ?array
     {
-        $message = $this->settings->get(self::LAST_RESULT);
-        if ($message === null) {
-            return null;
-        }
-        return [
-            'message' => $message,
-            'at' => $this->settings->get(self::LAST_RESULT_AT),
-            'ok' => $this->settings->get(self::LAST_RESULT_OK) === '1',
-        ];
+        return $this->status->last();
     }
 
     /**
@@ -111,17 +104,7 @@ class OverdueNotifier
      */
     private function record(int $now, string $message, bool $done): string
     {
-        $values = [
-            self::LAST_RESULT => $message,
-            self::LAST_RESULT_AT => date('Y-m-d H:i:s', $now),
-            self::LAST_RESULT_OK => $done ? '1' : '0',
-        ];
-        if ($done) {
-            $values[self::LAST_RUN_DATE] = date('Y-m-d', $now);
-        }
-        $this->settings->setMany($values);
-
-        return $message;
+        return $this->status->record($now, $message, $done, $done ? [self::LAST_RUN_DATE => date('Y-m-d', $now)] : []);
     }
 
     private function overdueSubject(array $overdue, NotificationSettings $config): string
@@ -143,7 +126,8 @@ class OverdueNotifier
 
         foreach ($overdue as $record) {
             $outTime = strtotime($record['checkout_time']);
-            $lines[] = "  #{$record['asset_number']}  {$record['user_name']}"
+            $who = $record['user_name'] . (empty($record['user_email']) ? '' : " <{$record['user_email']}>");
+            $lines[] = "  #{$record['asset_number']}  $who"
                 . ' (checked out ' . date('M j, g:i A', $outTime) . '; out for ' . UsageStats::formatDuration($now - $outTime) . ')';
         }
 

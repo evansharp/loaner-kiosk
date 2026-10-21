@@ -20,3 +20,8 @@ body { background-color: #f4f6f9; }
 .flash-success { animation: flashSuccess 1.2s ease-out; }
 .flash-warning { animation: flashWarning 1.2s ease-out; }
 .flash-danger { animation: flashDanger 1.2s ease-out; }
+
+/* Directory name suggestions under the "Checkout To" field */
+.user-suggestions { top: 100%; left: 0; max-height: 360px; overflow-y: auto; }
+.user-suggestions .dropdown-item { cursor: pointer; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.user-suggestions .dropdown-item.active .text-muted { color: rgba(255, 255, 255, 0.8) !important; }

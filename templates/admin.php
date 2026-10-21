@@ -5,11 +5,17 @@
  * @var ?Alert      $alert
  * @var array       $allRecords
  * @var array       $deviceStats  asset_number => total_seconds
- * @var array       $topUsers     user_name => total_seconds
+ * @var array[]     $topUsers     ['name', 'email', 'seconds'] from UsageStats::topUsers()
  * @var PhotoStore  $photos
+ * @var string      $csrfToken    Included in every form; checked by public/admin.php
  * @var NotificationSettings $notificationSettings
  * @var array|null  $lastNotification  ['message', 'at', 'ok'] from OverdueNotifier::lastResult()
+ * @var DirectorySettings $directorySettings
+ * @var array|null  $lastDirectorySync ['message', 'at', 'ok'] from DirectorySync::lastResult()
+ * @var int         $directoryPeopleCount
+ * @var ServiceAccountKey|null $serviceAccountKey
  */
+$csrfField = '<input type="hidden" name="csrf" value="' . htmlspecialchars($csrfToken) . '">';
 
 // Chart data for assets/js/admin.js
 $chartData = [];
@@ -31,7 +37,7 @@ foreach ($deviceStats as $asset => $seconds) {
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link rel="stylesheet" href="assets/css/admin.css">
 </head>
-<body>
+<body data-idle-timeout="<?= AdminAuth::IDLE_TIMEOUT ?>">
 
 <div class="container py-4" style="max-width: 1200px;">
     <!-- Top Header -->
@@ -44,7 +50,7 @@ foreach ($deviceStats as $asset => $seconds) {
             </div>
         </div>
         <div>
-            <a href="index.php" class="btn btn-outline-secondary btn-sm fw-semibold">
+            <a href="admin.php?logout=1" class="btn btn-outline-secondary btn-sm fw-semibold" title="Logs out of the admin page">
                 <i class="bi bi-display me-1"></i> Open Kiosk View
             </a>
         </div>
@@ -79,13 +85,13 @@ foreach ($deviceStats as $asset => $seconds) {
                         <p class="text-muted text-center py-4">No usage data available.</p>
                     <?php else: ?>
                         <ul class="list-group list-group-flush">
-                            <?php $rank = 1; foreach ($topUsers as $userName => $seconds): ?>
+                            <?php $rank = 1; foreach ($topUsers as $topUser): ?>
                                 <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-3">
                                     <div class="d-flex align-items-center gap-2">
                                         <span class="badge bg-primary rounded-circle p-2" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;"><?= $rank++ ?></span>
-                                        <span class="fw-semibold text-truncate" style="max-width: 150px;" title="<?= htmlspecialchars($userName) ?>"><?= htmlspecialchars($userName) ?></span>
+                                        <span class="fw-semibold text-truncate" style="max-width: 150px;" title="<?= htmlspecialchars($topUser['email'] ?: $topUser['name']) ?>"><?= htmlspecialchars($topUser['name']) ?></span>
                                     </div>
-                                    <span class="badge bg-light text-dark border font-monospace"><?= UsageStats::formatDuration($seconds) ?></span>
+                                    <span class="badge bg-light text-dark border font-monospace"><?= UsageStats::formatDuration($topUser['seconds']) ?></span>
                                 </li>
                             <?php endforeach; ?>
                         </ul>
@@ -186,12 +192,17 @@ foreach ($deviceStats as $asset => $seconds) {
                                             $photoUrl = $photos->urlFor($record['photo_uuid'] ?? null, $record['checkout_time']);
                                         ?>
                                         <tr data-asset="<?= htmlspecialchars(strtolower($record['asset_number'])) ?>"
-                                            data-user="<?= htmlspecialchars(strtolower($record['user_name'])) ?>"
+                                            data-user="<?= htmlspecialchars(strtolower(trim($record['user_name'] . ' ' . ($record['user_email'] ?? '')))) ?>"
                                             data-dateout="<?= $checkoutDateOnly ?>"
                                             data-datein="<?= $checkinDateOnly ?>">
                                             <td class="text-muted small"><?= (int)$record['id'] ?></td>
                                             <td><span class="badge bg-light text-dark border font-monospace">#<?= htmlspecialchars($record['asset_number']) ?></span></td>
-                                            <td class="fw-semibold"><?= htmlspecialchars($record['user_name']) ?></td>
+                                            <td class="fw-semibold">
+                                                <?= htmlspecialchars($record['user_name']) ?>
+                                                <?php if (!empty($record['user_email'])): ?>
+                                                    <div class="small text-muted fw-normal" title="Linked to the Google directory"><i class="bi bi-google me-1"></i><?= htmlspecialchars($record['user_email']) ?></div>
+                                                <?php endif; ?>
+                                            </td>
                                             <td><small class="text-secondary"><?= htmlspecialchars($record['checkout_time']) ?></small></td>
                                             <td><small class="text-secondary"><?= $record['checkin_time'] ? htmlspecialchars($record['checkin_time']) : '—' ?></small></td>
                                             <td>
@@ -223,6 +234,7 @@ foreach ($deviceStats as $asset => $seconds) {
                                                     <i class="bi bi-pencil"></i>
                                                 </button>
                                                 <form method="POST" action="admin.php" class="d-inline" onsubmit="return confirm('Are you sure you want to delete record #<?= (int)$record['id'] ?>?');">
+                                                    <?= $csrfField ?>
                                                     <input type="hidden" name="action" value="delete">
                                                     <input type="hidden" name="record_id" value="<?= (int)$record['id'] ?>">
                                                     <button type="submit" class="btn btn-sm btn-outline-danger">
@@ -259,6 +271,7 @@ foreach ($deviceStats as $asset => $seconds) {
                     <?php endif; ?>
 
                     <form method="POST" action="admin.php#notificationSettings">
+                        <?= $csrfField ?>
                         <div class="row g-4">
                             <!-- When & who to notify -->
                             <div class="col-lg-5">
@@ -365,12 +378,108 @@ foreach ($deviceStats as $asset => $seconds) {
             </div>
         </div>
     </div>
+
+    <!-- Row 5: Google Directory Settings -->
+    <div class="row g-4 mt-0" id="directorySettings">
+        <div class="col-12">
+            <div class="card admin-card">
+                <div class="card-body p-4">
+                    <h5 class="card-title fw-bold mb-3"><i class="bi bi-people-fill me-2 text-success"></i>Google Directory</h5>
+
+                    <?php if ($alert && $alert->section === 'directory'): ?>
+                        <div class="alert alert-<?= $alert->type ?> alert-dismissible fade show mb-4" role="alert">
+                            <?= htmlspecialchars($alert->message) ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    <?php endif; ?>
+
+                    <form method="POST" action="admin.php#directorySettings" enctype="multipart/form-data">
+                        <?= $csrfField ?>
+                        <div class="row g-4">
+                            <!-- Name lookup & org units -->
+                            <div class="col-lg-5">
+                                <h6 class="settings-heading">Name Lookup</h6>
+
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="directoryEnabled" name="directory_enabled" value="1" <?= $directorySettings->enabled ? 'checked' : '' ?>>
+                                    <label class="form-check-label fw-semibold" for="directoryEnabled">Suggest names from the Google directory</label>
+                                </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="directoryAllowTyped" name="directory_allow_typed_names" value="1" <?= $directorySettings->allowTypedNames ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="directoryAllowTyped">Also allow typed names that aren't in the directory</label>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="directoryOrgUnits" class="form-label fw-semibold">Org Units to Sync</label>
+                                    <textarea class="form-control font-monospace" id="directoryOrgUnits" name="directory_org_units" rows="4" placeholder="/Students&#10;/Staff"><?= htmlspecialchars($directorySettings->orgUnits) ?></textarea>
+                                    <div class="form-text">One org unit path per line, as shown in the Google Admin console. Sub-units are included.</div>
+                                </div>
+
+                                <div class="small p-3 rounded border bg-light">
+                                    <span class="fw-semibold">Last sync:</span>
+                                    <?php if ($lastDirectorySync): ?>
+                                        <?= htmlspecialchars(date('M j, Y — g:i A', strtotime($lastDirectorySync['at']))) ?><br>
+                                        <span class="<?= $lastDirectorySync['ok'] ? 'text-success' : 'text-danger' ?>"><?= htmlspecialchars($lastDirectorySync['message']) ?></span>
+                                    <?php else: ?>
+                                        <span class="text-muted">Never run.</span>
+                                    <?php endif; ?>
+                                    <br><span class="fw-semibold">People available:</span> <?= number_format($directoryPeopleCount) ?>
+                                </div>
+                            </div>
+
+                            <!-- Service account -->
+                            <div class="col-lg-7">
+                                <h6 class="settings-heading">Service Account</h6>
+
+                                <div class="mb-3">
+                                    <?php if ($serviceAccountKey): ?>
+                                        <div class="d-flex justify-content-between align-items-center p-3 rounded border mb-3">
+                                            <div class="small">
+                                                <i class="bi bi-key-fill text-success me-1"></i>
+                                                <span class="fw-semibold"><?= htmlspecialchars($serviceAccountKey->clientEmail) ?></span>
+                                                <?php if ($serviceAccountKey->projectId !== ''): ?>
+                                                    <div class="text-muted">Project: <?= htmlspecialchars($serviceAccountKey->projectId) ?></div>
+                                                <?php endif; ?>
+                                            </div>
+                                            <button type="submit" name="action" value="remove_directory_key" class="btn btn-sm btn-outline-danger" formnovalidate onclick="return confirm('Remove the saved service account key?');">
+                                                <i class="bi bi-trash"></i> Remove
+                                            </button>
+                                        </div>
+                                    <?php endif; ?>
+                                    <label for="directoryKey" class="form-label fw-semibold"><?= $serviceAccountKey ? 'Replace Key File' : 'Key File' ?></label>
+                                    <input type="file" class="form-control" id="directoryKey" name="directory_key" accept=".json,application/json">
+                                    <div class="form-text">The service account's JSON key from Google Cloud. It's stored on this Mac in the project's <code>private/</code> folder, readable only by the kiosk's user account, and is never committed to git.</div>
+                                </div>
+
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Setup:</strong>
+                                    In a Google Cloud project, enable the <strong>Admin SDK API</strong>, create a service account, and download a JSON key for it.
+                                    Then in the Google Admin console, go to <strong>Account → Admin roles</strong>, create a role with only the <strong>Users → Read</strong> privilege, and assign it to the service account's email address.
+                                    The directory is re-synced every 6 hours while the kiosk is running.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                            <button type="submit" name="action" value="sync_directory" class="btn btn-outline-primary">
+                                <i class="bi bi-arrow-repeat me-1"></i> Save &amp; Sync Now
+                            </button>
+                            <button type="submit" name="action" value="save_directory" class="btn btn-primary">
+                                Save Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Edit Record Modal -->
 <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <form method="POST" action="admin.php" class="modal-content">
+            <?= $csrfField ?>
             <div class="modal-header">
                 <h5 class="modal-title fw-bold" id="editModalLabel">Edit Checkout Record</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>

@@ -30,6 +30,27 @@ class Database
             value TEXT
         )");
 
+        // People synced from the Google directory, for name autocomplete
+        $pdo->exec("CREATE TABLE IF NOT EXISTS people (
+            google_id TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            name TEXT NOT NULL,
+            org_unit TEXT,
+            active INTEGER NOT NULL DEFAULT 1
+        )");
+
+        // Checkouts linked to a directory person (both NULL for typed names and older records)
+        self::addColumnIfMissing($pdo, 'checkouts', 'user_id', 'TEXT DEFAULT NULL');
+        self::addColumnIfMissing($pdo, 'checkouts', 'user_email', 'TEXT DEFAULT NULL');
+
         return $pdo;
+    }
+
+    private static function addColumnIfMissing(PDO $pdo, string $table, string $column, string $definition): void
+    {
+        $columns = $pdo->query("PRAGMA table_info($table)")->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array($column, $columns, true)) {
+            $pdo->exec("ALTER TABLE $table ADD COLUMN $column $definition");
+        }
     }
 }

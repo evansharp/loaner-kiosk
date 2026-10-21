@@ -2,10 +2,11 @@
 /**
  * Kiosk page view.
  *
- * @var KioskState $state
- * @var array      $checkouts
- * @var int        $totalCheckouts
- * @var int        $currentlyOut
+ * @var KioskState        $state
+ * @var array             $checkouts
+ * @var int               $totalCheckouts
+ * @var int               $currentlyOut
+ * @var DirectorySettings $directory
  */
 ?>
 <!DOCTYPE html>
@@ -22,7 +23,8 @@
 </head>
 <body data-focus-target="<?= htmlspecialchars($state->focusTarget) ?>"
       data-sound="<?= htmlspecialchars($state->soundType ?? '') ?>"
-      data-auto-reset="<?= $state->autoReset ? 'true' : 'false' ?>">
+      data-auto-reset="<?= $state->autoReset ? 'true' : 'false' ?>"
+      data-directory="<?= $directory->enabled ? ($directory->allowTypedNames ? 'allow-typed' : 'directory-only') : 'off' ?>">
 
 <div class="container py-4" style="max-width: 1000px;">
     <!-- Coast Mountain Academy Header -->
@@ -68,12 +70,17 @@
                 <!-- Field 2: Person's Name -->
                 <div class="col-md-5">
                     <label for="user_name" class="form-label fw-bold fs-5">2. Checkout To</label>
-                    <div class="input-group input-group-lg">
-                        <span class="input-group-text"><i class="bi bi-person"></i></span>
-                        <input type="text" class="form-control" id="user_name" name="user_name"
-                               placeholder="Type student name" value="<?= htmlspecialchars($state->prefillUser) ?>"
-                               autocomplete="off">
+                    <div class="position-relative">
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text"><i class="bi bi-person" id="userIcon"></i></span>
+                            <input type="text" class="form-control" id="user_name" name="user_name"
+                                   placeholder="<?= $directory->enabled ? 'Start typing your name' : 'Type student name' ?>" value="<?= htmlspecialchars($state->prefillUser) ?>"
+                                   autocomplete="off">
+                        </div>
+                        <!-- Directory name suggestions (filled by kiosk.js) -->
+                        <ul id="userSuggestions" class="dropdown-menu w-100 user-suggestions" role="listbox"></ul>
                     </div>
+                    <input type="hidden" name="user_id" id="user_id" value="">
                 </div>
 
                 <input type="hidden" name="photo_uuid" id="photo_uuid">

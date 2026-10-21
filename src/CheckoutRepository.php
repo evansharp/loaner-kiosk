@@ -33,14 +33,20 @@ class CheckoutRepository
         return $stmt->rowCount() > 0;
     }
 
-    public function checkOut(string $assetNumber, string $userName, ?string $photoUuid): void
+    /**
+     * @param string|null $userId    Google directory ID, if the person was picked from the directory
+     * @param string|null $userEmail Their directory email at the time of checkout
+     */
+    public function checkOut(string $assetNumber, string $userName, ?string $photoUuid, ?string $userId = null, ?string $userEmail = null): void
     {
-        $stmt = $this->pdo->prepare("INSERT INTO checkouts (asset_number, user_name, checkout_time, photo_uuid) VALUES (:asset, :name, :time, :uuid)");
+        $stmt = $this->pdo->prepare("INSERT INTO checkouts (asset_number, user_name, checkout_time, photo_uuid, user_id, user_email) VALUES (:asset, :name, :time, :uuid, :user_id, :user_email)");
         $stmt->execute([
             ':asset' => $assetNumber,
             ':name' => $userName,
             ':time' => date('Y-m-d H:i:s'),
-            ':uuid' => $photoUuid
+            ':uuid' => $photoUuid,
+            ':user_id' => $userId,
+            ':user_email' => $userEmail
         ]);
     }
 

@@ -12,10 +12,18 @@ class KioskController
     /** @var PhotoStore */
     private $photos;
 
-    public function __construct(CheckoutRepository $checkouts, PhotoStore $photos)
+    /** @var PeopleRepository */
+    private $people;
+
+    /** @var DirectorySettings */
+    private $directory;
+
+    public function __construct(CheckoutRepository $checkouts, PhotoStore $photos, PeopleRepository $people, DirectorySettings $directory)
     {
         $this->checkouts = $checkouts;
         $this->photos = $photos;
+        $this->people = $people;
+        $this->directory = $directory;
     }
 
     public function handlePost(array $post): KioskState
@@ -68,14 +76,26 @@ class KioskController
             return;
         }
 
-        // Validate full name (require at least 2 words: e.g., First and Last name)
-        $nameWords = preg_split('/\s+/', $userName);
-        if (count($nameWords) < 2) {
-            $state->error("<strong>INVALID NAME:</strong> Please enter the full name (first and last name required).");
+        $person = $this->findPerson($userName, trim((string)($post['user_id'] ?? '')));
+
+        if ($person) {
+            $userName = $person['name'];
+        } elseif ($this->directory->enabled && !$this->directory->allowTypedNames) {
+            $state->error("<strong>NAME NOT FOUND:</strong> Please start typing your name and choose it from the list.");
             $state->prefillAsset = $assetNumber;
             $state->prefillUser = $userName;
             $state->focusTarget = "user_name";
             return;
+        } else {
+            // Validate full name (require at least 2 words: e.g., First and Last name)
+            $nameWords = preg_split('/\s+/', $userName);
+            if (count($nameWords) < 2) {
+                $state->error("<strong>INVALID NAME:</strong> Please enter the full name (first and last name required).");
+                $state->prefillAsset = $assetNumber;
+                $state->prefillUser = $userName;
+                $state->focusTarget = "user_name";
+                return;
+            }
         }
 
         // Photo Handling
@@ -83,13 +103,32 @@ class KioskController
         $photoBlob = $post['photo_blob'] ?? null;
 
         if ($photoUuid && $photoBlob) {
-            $this->photos->save($photoUuid, $photoBlob);
+            if (!$this->photos->save($photoUuid, $photoBlob)) {
+                $photoUuid = null; // Not a safe filename; don't record a photo that wasn't saved
+            }
+        } else {
+            $photoUuid = null;
         }
 
         // Name provided and valid -> Complete Check-Out
-        $this->checkouts->checkOut($assetNumber, $userName, $photoUuid);
+        $this->checkouts->checkOut($assetNumber, $userName, $photoUuid, $person['google_id'] ?? null, $person['email'] ?? null);
 
         $state->success("<strong>CHECK-OUT SUCCESS!</strong> Chromebook <strong>#" . htmlspecialchars($assetNumber) . "</strong> assigned to <strong>" . htmlspecialchars($userName) . "</strong>.");
         $state->autoReset = true;
+    }
+
+    /**
+     * The directory person being checked out to: the one picked from the autocomplete list,
+     * or else the only active person whose name exactly matches what was typed.
+     */
+    private function findPerson(string $userName, string $userId): ?array
+    {
+        if (!$this->directory->enabled) {
+            return null;
+        }
+        if ($userId !== '') {
+            return $this->people->findActive($userId);
+        }
+        return $this->people->findActiveByExactName($userName);
     }
 }

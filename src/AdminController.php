@@ -1,10 +1,14 @@
 <?php
 
 /**
- * Handles admin actions: record management (Delete / Edit) and notification settings.
+ * Handles admin actions: record management (Delete / Edit), notification settings,
+ * and Google directory settings.
  */
 class AdminController
 {
+    // Largest service account key file accepted (they are about 2.3 KB)
+    const MAX_KEY_FILE_BYTES = 20000;
+
     /** @var CheckoutRepository */
     private $checkouts;
 
@@ -14,20 +18,33 @@ class AdminController
     /** @var OverdueNotifier */
     private $notifier;
 
+    /** @var DirectorySync */
+    private $directorySync;
+
+    /** @var string */
+    private $keyFile;
+
     /** @var NotificationSettings|null Submitted settings that failed validation, to redisplay unsaved */
     public $settingsDraft = null;
 
-    public function __construct(CheckoutRepository $checkouts, SettingsRepository $settings, OverdueNotifier $notifier)
+    /** @var DirectorySettings|null Submitted directory settings that failed validation, to redisplay unsaved */
+    public $directoryDraft = null;
+
+    public function __construct(CheckoutRepository $checkouts, SettingsRepository $settings, OverdueNotifier $notifier, DirectorySync $directorySync, string $keyFile)
     {
         $this->checkouts = $checkouts;
         $this->settings = $settings;
         $this->notifier = $notifier;
+        $this->directorySync = $directorySync;
+        $this->keyFile = $keyFile;
     }
 
     /**
      * Returns an Alert describing the outcome, or null if nothing was done.
+     *
+     * @param array $files Uploaded files ($_FILES)
      */
-    public function handlePost(array $post): ?Alert
+    public function handlePost(array $post, array $files = []): ?Alert
     {
         $action = $post['action'] ?? '';
         $id = (int)($post['record_id'] ?? 0);
@@ -51,9 +68,65 @@ class AdminController
             return new Alert("Error: Asset number, user name, and check-out time are required.", "danger");
         } elseif ($action === 'save_settings' || $action === 'test_email') {
             return $this->saveSettings($post, $action === 'test_email');
+        } elseif ($action === 'save_directory' || $action === 'sync_directory') {
+            return $this->saveDirectory($post, $files['directory_key'] ?? null, $action === 'sync_directory');
+        } elseif ($action === 'remove_directory_key') {
+            if (is_file($this->keyFile)) {
+                unlink($this->keyFile);
+            }
+            return new Alert('Service account key removed. People already synced are kept.', 'success', 'directory');
         }
 
         return null;
+    }
+
+    /**
+     * @param array|null $upload Uploaded service account key ($_FILES entry), if any
+     */
+    private function saveDirectory(array $post, ?array $upload, bool $syncNow): Alert
+    {
+        $config = DirectorySettings::load($this->settings);
+        $config->applyPost($post);
+
+        // Optional new service account key
+        $newKeyJson = null;
+        if ($upload && $upload['error'] !== UPLOAD_ERR_NO_FILE) {
+            if ($upload['error'] !== UPLOAD_ERR_OK || $upload['size'] > self::MAX_KEY_FILE_BYTES) {
+                $this->directoryDraft = $config;
+                return new Alert('Settings not saved. The key file could not be uploaded; choose the .json key file downloaded from Google Cloud.', 'danger', 'directory');
+            }
+            $newKeyJson = (string)file_get_contents($upload['tmp_name']);
+            try {
+                ServiceAccountKey::fromJson($newKeyJson);
+            } catch (InvalidArgumentException $e) {
+                $this->directoryDraft = $config;
+                return new Alert('Settings not saved. ' . $e->getMessage(), 'danger', 'directory');
+            }
+        }
+
+        $errors = $config->validate($newKeyJson !== null || is_file($this->keyFile));
+        if ($errors) {
+            $this->directoryDraft = $config;
+            return new Alert('Settings not saved. ' . implode(' ', $errors), 'danger', 'directory');
+        }
+
+        if ($newKeyJson !== null) {
+            // Readable only by the kiosk's user
+            $oldUmask = umask(0077);
+            file_put_contents($this->keyFile, $newKeyJson);
+            umask($oldUmask);
+            chmod($this->keyFile, 0600);
+        }
+        $config->save($this->settings);
+
+        $saved = 'Directory settings saved' . ($newKeyJson !== null ? ' and service account key uploaded' : '') . '.';
+        if (!$syncNow) {
+            return new Alert($saved, 'success', 'directory');
+        }
+
+        $result = $this->directorySync->run(time(), true);
+        $ok = ($this->directorySync->lastResult()['ok'] ?? false);
+        return new Alert("$saved $result", $ok ? 'success' : 'danger', 'directory');
     }
 
     private function saveSettings(array $post, bool $sendTest): Alert

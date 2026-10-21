@@ -80,8 +80,10 @@ fi
 # 4. GENERATING RUNTIME HOOKS & LAUNCHAGENT
 # ==========================================
 
-# 4a. Write Runtime Worker Script
-echo "Writing worker loop execution script..."
+# 4a. Write the Login Launcher Script
+# It only pulls the latest code and hands off to scripts/kiosk_worker.sh in the repo,
+# so later changes to the kiosk runtime arrive with git pull (no need to re-run this).
+echo "Writing kiosk launcher script..."
 cat << 'EOF' > "$LAUNCH_SCRIPT"
 #!/bin/bash
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
@@ -100,48 +102,8 @@ cd "$PROJECT_DIR"
 echo "Synchronizing with upstream remote branch..." >> "$LOG_FILE"
 git pull origin $(git branch --show-current) >> "$LOG_FILE" 2>&1
 
-# -------------------------------------------------------------
-# 1. START LOCAL PHP SERVER IN BACKGROUND
-# -------------------------------------------------------------
-echo "[$(date)] Starting local PHP server instance on port $PORT..." >> "$LOG_FILE"
-php -S localhost:$PORT >> "$LOG_FILE" 2>&1 &
-PHP_PID=$!
-
-# Wait briefly for PHP server to bind to port
-sleep 1
-
-# -------------------------------------------------------------
-# 2. CHROME INITIALIZATION (Runs once at startup; no auto-revive)
-# -------------------------------------------------------------
-open -a "Google Chrome" --args \
-  --kiosk \
-  --disable-session-crashed-bubble \
-  --no-first-run \
-  "http://localhost:$PORT"
-
-# -------------------------------------------------------------
-# 3. INFINITE WATCH & RECOVERY LOOP (Logs crash/uptime analytics)
-#    Also runs the overdue-device email check every ~5 minutes
-#    (60 x 5s); the checker itself sends at most once per day.
-# -------------------------------------------------------------
-TICKS=0
-while true; do
-    if [ $((TICKS % 60)) -eq 0 ]; then
-        php "$PROJECT_DIR/bin/notify_overdue.php" >> "$LOG_FILE" 2>&1 &
-    fi
-    TICKS=$((TICKS + 1))
-
-    if ! kill -0 $PHP_PID 2>/dev/null; then
-        echo "[$(date)] CRITICAL: PHP server dropped socket connection or crashed." >> "$LOG_FILE"
-        echo "[$(date)] Attempting recovery bind step in 3 seconds..." >> "$LOG_FILE"
-        sleep 3
-
-        lsof -ti :$PORT | xargs kill -9 2>/dev/null || true
-        php -S localhost:$PORT >> "$LOG_FILE" 2>&1 &
-        PHP_PID=$!
-    fi
-    sleep 5
-done
+# Server, Chrome, watchdog and background jobs live in the repo
+exec /bin/bash "$PROJECT_DIR/scripts/kiosk_worker.sh" "$PORT"
 EOF
 
 # Inject the dynamically derived strings into the static background worker template

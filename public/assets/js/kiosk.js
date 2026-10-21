@@ -45,6 +45,162 @@ function playChime(type) {
     }
 }
 
+/**
+ * Turns the "Checkout To" field into a combobox that suggests people from the synced
+ * Google directory (people.php). Choosing a suggestion fills the hidden user_id field,
+ * which links the checkout to that person.
+ *
+ * @param {boolean} allowTyped Offer "Use what I typed" for names not in the directory
+ */
+function setupNameAutocomplete(allowTyped) {
+    const input = document.getElementById('user_name');
+    const userIdInput = document.getElementById('user_id');
+    const list = document.getElementById('userSuggestions');
+    const icon = document.getElementById('userIcon');
+
+    let items = [];          // [{id, name, email}], plus {typed: true, name} for "use what I typed"
+    let activeIndex = -1;
+    let debounceTimer = null;
+    let requestSeq = 0;      // Ignore responses to older keystrokes
+    let pending = false;     // Suggestions for the current text haven't arrived yet
+
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-controls', 'userSuggestions');
+    input.setAttribute('aria-expanded', 'false');
+
+    function markLinked(linked) {
+        icon.className = linked ? 'bi bi-person-check-fill text-success' : 'bi bi-person';
+    }
+
+    function close() {
+        items = [];
+        activeIndex = -1;
+        list.classList.remove('show');
+        list.replaceChildren();
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+    }
+
+    function render() {
+        list.replaceChildren();
+        items.forEach((item, i) => {
+            const option = document.createElement('li');
+            option.id = 'userSuggestion' + i;
+            option.setAttribute('role', 'option');
+            option.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
+
+            const row = document.createElement('div');
+            row.className = 'dropdown-item' + (i === activeIndex ? ' active' : '');
+            if (item.typed) {
+                row.classList.add('fst-italic', 'border-top');
+                row.textContent = `Use “${item.name}” (not in the directory)`;
+            } else {
+                const name = document.createElement('div');
+                name.className = 'fw-semibold';
+                name.textContent = item.name;
+                const email = document.createElement('div');
+                email.className = 'small text-muted';
+                email.textContent = item.email;
+                row.append(name, email);
+            }
+            option.appendChild(row);
+
+            // mousedown (not click) so the input doesn't lose focus and close the list first
+            option.addEventListener('mousedown', e => {
+                e.preventDefault();
+                choose(i);
+            });
+            list.appendChild(option);
+        });
+
+        const open = items.length > 0;
+        list.classList.toggle('show', open);
+        input.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (activeIndex >= 0) {
+            input.setAttribute('aria-activedescendant', 'userSuggestion' + activeIndex);
+            document.getElementById('userSuggestion' + activeIndex).scrollIntoView({ block: 'nearest' });
+        } else {
+            input.removeAttribute('aria-activedescendant');
+        }
+    }
+
+    function choose(i) {
+        const item = items[i];
+        input.value = item.name;
+        userIdInput.value = item.typed ? '' : item.id;
+        markLinked(!item.typed);
+        close();
+    }
+
+    async function fetchSuggestions(query) {
+        const seq = ++requestSeq;
+        let people = [];
+        try {
+            const response = await fetch('people.php?q=' + encodeURIComponent(query));
+            people = await response.json();
+        } catch (e) {
+            console.warn('Name lookup failed:', e);
+        }
+        if (seq !== requestSeq) return; // A newer keystroke has its own request
+
+        pending = false;
+        items = people.slice();
+        const exactMatch = people.some(p => p.name.toLowerCase() === query.toLowerCase());
+        if (allowTyped && people.length > 0 && !exactMatch) {
+            items.push({ typed: true, name: query });
+        }
+        activeIndex = items.length > 0 ? 0 : -1; // Enter picks the top match
+        render();
+    }
+
+    input.addEventListener('input', () => {
+        // Edited text no longer matches a chosen person
+        userIdInput.value = '';
+        markLinked(false);
+
+        clearTimeout(debounceTimer);
+        const query = input.value.trim();
+        if (query.length < 2) {
+            requestSeq++;
+            pending = false;
+            close();
+            return;
+        }
+        pending = true;
+        debounceTimer = setTimeout(() => fetchSuggestions(query), 150);
+    });
+
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && pending) {
+            // Don't submit a half-typed name before its suggestions have arrived
+            e.preventDefault();
+            clearTimeout(debounceTimer);
+            fetchSuggestions(input.value.trim());
+            return;
+        }
+        if (!list.classList.contains('show')) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = (activeIndex + 1) % items.length;
+            render();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = (activeIndex - 1 + items.length) % items.length;
+            render();
+        } else if (e.key === 'Enter' && activeIndex >= 0) {
+            e.preventDefault();
+            choose(activeIndex);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            close();
+        }
+    });
+
+    input.addEventListener('blur', close);
+}
+
 // Initial setup on load
 document.addEventListener("DOMContentLoaded", () => {
     // Server-side state is passed via data attributes on <body>
@@ -70,6 +226,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             document.getElementById('asset_number').value = '';
             document.getElementById('user_name').value = '';
+            document.getElementById('user_name').dispatchEvent(new Event('input')); // Also clears a chosen directory person
 
             const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
             if (activeTag !== 'input' && activeTag !== 'select' && activeTag !== 'textarea') {
@@ -122,6 +279,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // --- Directory Name Autocomplete ---
+    if (config.directory && config.directory !== 'off') {
+        setupNameAutocomplete(config.directory === 'allow-typed');
+    }
+
     // --- Inactivity Reset Timer (5 Seconds) ---
     let inactivityTimer;
     function resetInactivityTimer() {
@@ -141,7 +303,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (hasValues) {
                 if (assetInput) assetInput.value = '';
-                if (userInput) userInput.value = '';
+                if (userInput) {
+                    userInput.value = '';
+                    userInput.dispatchEvent(new Event('input')); // Also clears a chosen directory person
+                }
                 if (filterInput) {
                     filterInput.value = '';
                     filterInput.dispatchEvent(new Event('input'));

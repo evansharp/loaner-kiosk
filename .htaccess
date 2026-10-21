@@ -1,0 +1,8 @@
+# Local development with Apache: serve only public/, never private/, src/, .git/, etc.
+# (The kiosk itself runs `php -S localhost:8080 -t public`, which doesn't read this file.)
+DirectoryIndex index.php
+
+RewriteEngine On
+RewriteBase /
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ public/$1 [L]

@@ -1,5 +1,21 @@
 // --- D3.js Device Time Chart ---
 document.addEventListener("DOMContentLoaded", () => {
+    // --- Idle Logout ---
+    // This page shares a browser with the student kiosk: after the server's session timeout
+    // with no activity, log out and go back to the kiosk instead of leaving admin tools open.
+    const idleTimeoutMs = (parseInt(document.body.dataset.idleTimeout, 10) || 600) * 1000;
+    let idleTimer;
+    function resetIdleTimer() {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+            window.location.href = 'admin.php?logout=1';
+        }, idleTimeoutMs);
+    }
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'input'].forEach(event => {
+        document.addEventListener(event, resetIdleTimer, true);
+    });
+    resetIdleTimer();
+
     // Device totals are passed from PHP via the chart container's data-chart attribute
     const chartData = JSON.parse(document.getElementById('deviceChart').dataset.chart || '[]');
     const rawData = chartData.map(d => ({ asset: d.asset, hours: +(d.seconds / 3600).toFixed(2) }));

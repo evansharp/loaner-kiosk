@@ -1,26 +1,45 @@
 <?php
-require __DIR__ . '/src/bootstrap.php';
-
-// 1. Initialize SQLite Database
-try {
-    $pdo = Database::connect(APP_ROOT . '/chromebooks.sqlite');
-} catch (PDOException $e) {
-    die("Database Error: " . htmlspecialchars($e->getMessage()));
+/**
+ * Compatibility router for kiosks whose launcher still runs `php -S` from the repo root
+ * (set up before the public/ folder existed). PHP's built-in server sends requests for
+ * missing files here, so serve them from public/ instead.
+ *
+ * Re-running bootstrap_env.sh switches the kiosk to `php -S -t public`, which never uses this file.
+ */
+if (PHP_SAPI !== 'cli-server') {
+    http_response_code(404);
+    exit;
 }
 
-$repository = new CheckoutRepository($pdo);
-$controller = new KioskController($repository, new PhotoStore(APP_ROOT . '/checkout_verification', 'checkout_verification'));
+$publicDir = realpath(__DIR__ . '/public');
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+if ($path === '/' || $path === '') {
+    $path = '/index.php';
+}
 
-// 2. Handle POST Actions (Smart Scan Logic + Asset URL Parsing)
-$state = $_SERVER['REQUEST_METHOD'] === 'POST'
-    ? $controller->handlePost($_POST)
-    : new KioskState();
+$file = realpath($publicDir . $path);
+if ($file === false || strpos($file, $publicDir . '/') !== 0 || !is_file($file)) {
+    http_response_code(404);
+    echo 'Not Found';
+    exit;
+}
 
-// 3. Fetch History (All records fetched for client-side live filtering in kiosk mode)
-$checkouts = $repository->all();
+if (substr($file, -4) === '.php') {
+    $_SERVER['SCRIPT_NAME'] = $_SERVER['PHP_SELF'] = $path;
+    $_SERVER['SCRIPT_FILENAME'] = $file;
+    require $file;
+    exit;
+}
 
-// 4. Quick Statistics
-$totalCheckouts = $repository->countAll();
-$currentlyOut = $repository->countActive();
-
-require __DIR__ . '/templates/kiosk.php';
+$contentTypes = [
+    'css' => 'text/css',
+    'js' => 'application/javascript',
+    'png' => 'image/png',
+    'jpg' => 'image/jpeg',
+    'svg' => 'image/svg+xml',
+    'ico' => 'image/x-icon',
+];
+$extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+header('Content-Type: ' . ($contentTypes[$extension] ?? 'application/octet-stream'));
+header('Content-Length: ' . filesize($file));
+readfile($file);
