@@ -17,6 +17,7 @@ class NotificationSettings extends SettingsGroup
         'notifyUsers' => 'notify_users',
         'notifyTime' => 'notify_time',
         'recipients' => 'notify_recipients',
+        'schoolName' => 'school_name',
         'smtpHost' => 'smtp_host',
         'smtpPort' => 'smtp_port',
         'smtpEncryption' => 'smtp_encryption',
@@ -31,6 +32,7 @@ class NotificationSettings extends SettingsGroup
     public $notifyUsers = true;    // Also email each borrower linked to the Google directory
     public $notifyTime = '15:30';  // HH:MM, 24-hour
     public $recipients = '';       // Comma-separated
+    public $schoolName = 'Coast Mountain Academy'; // Shown in email headers and footers
     public $smtpHost = 'smtp-relay.gmail.com';
     public $smtpPort = 587;
     public $smtpEncryption = 'tls';
@@ -50,6 +52,7 @@ class NotificationSettings extends SettingsGroup
         $this->notifyUsers = !empty($post['notify_users']);
         $this->notifyTime = substr(self::postedLine($post, 'notify_time'), 0, 5); // Drop seconds if the browser sends them
         $this->recipients = implode(', ', self::splitList(self::postedLine($post, 'notify_recipients')));
+        $this->schoolName = self::postedLine($post, 'school_name');
         $this->smtpHost = self::postedLine($post, 'smtp_host');
         $this->smtpPort = (int)self::postedLine($post, 'smtp_port');
         $this->smtpEncryption = self::postedLine($post, 'smtp_encryption');
@@ -81,6 +84,9 @@ class NotificationSettings extends SettingsGroup
             if (!filter_var($address, FILTER_VALIDATE_EMAIL)) {
                 $errors[] = "\"$address\" is not a valid recipient email address.";
             }
+        }
+        if ($this->schoolName === '') {
+            $errors[] = 'School name is required.';
         }
         if ($this->smtpHost !== '' && !self::isHostname($this->smtpHost)) {
             $errors[] = 'SMTP host must be a hostname, e.g. smtp-relay.gmail.com.';

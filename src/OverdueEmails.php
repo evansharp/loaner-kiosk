@@ -7,8 +7,6 @@
  */
 class OverdueEmails
 {
-    const SCHOOL_NAME = 'Coast Mountain Academy';
-
     // Borrower email outcomes passed to admin()
     const BORROWER_EMAILED = 'emailed';
     const BORROWER_EMAILS_OFF = 'off';
@@ -82,8 +80,8 @@ class OverdueEmails
 
         return [
             'subject' => $subject,
-            'text' => $this->textWithFooter($text),
-            'html' => $this->renderEmail('overdue_admin', $subject, $intro, [
+            'text' => $this->textWithFooter($text, $config),
+            'html' => $this->renderEmail('overdue_admin', $subject, $intro, $config, [
                 'heading' => $count === 1 ? '1 loaner Chromebook not returned' : "$count loaner Chromebooks not returned",
                 'intro' => $intro,
                 'rows' => $rows,
@@ -131,8 +129,8 @@ class OverdueEmails
 
         return [
             'subject' => $subject,
-            'text' => $this->textWithFooter($text),
-            'html' => $this->renderEmail('overdue_borrower', $subject, $intro, [
+            'text' => $this->textWithFooter($text, $config),
+            'html' => $this->renderEmail('overdue_borrower', $subject, $intro, $config, [
                 'heading' => $count === 1 ? 'Please return your loaner Chromebook' : 'Please return your loaner Chromebooks',
                 'name' => $borrower['name'],
                 'intro' => $intro,
@@ -172,25 +170,25 @@ class OverdueEmails
         return ["Couldn't email borrower: " . $status, 'error'];
     }
 
-    private function textWithFooter(array $lines): string
+    private function textWithFooter(array $lines, NotificationSettings $config): string
     {
         $lines[] = '';
         $lines[] = '-- ';
-        $lines[] = self::SCHOOL_NAME . ' - sent automatically by the Loaner Chromebook Kiosk.';
+        $lines[] = $config->schoolName . ' - sent automatically by the Loaner Chromebook Kiosk.';
         return implode("\n", $lines) . "\n";
     }
 
     /**
      * Renders a content template inside the shared email layout.
      */
-    private function renderEmail(string $template, string $title, string $preheader, array $vars): string
+    private function renderEmail(string $template, string $title, string $preheader, NotificationSettings $config, array $vars): string
     {
         $content = $this->render($template, $vars);
         return $this->render('layout', [
             'title' => $title,
             'preheader' => $preheader,
             'content' => $content,
-            'schoolName' => self::SCHOOL_NAME,
+            'schoolName' => $config->schoolName,
         ]);
     }
 

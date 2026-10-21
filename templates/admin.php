@@ -300,6 +300,11 @@ foreach ($deviceStats as $asset => $seconds) {
                                     <input type="text" class="form-control" id="notifyRecipients" name="notify_recipients" value="<?= htmlspecialchars($notificationSettings->recipients) ?>" placeholder="it@example.org, office@example.org" autocomplete="off">
                                     <div class="form-text">Comma-separated email addresses. They get the daily summary of all overdue devices.</div>
                                 </div>
+                                <div class="mb-3">
+                                    <label for="schoolName" class="form-label fw-semibold">School Name</label>
+                                    <input type="text" class="form-control" id="schoolName" name="school_name" value="<?= htmlspecialchars($notificationSettings->schoolName) ?>" required autocomplete="off">
+                                    <div class="form-text">Shown in the header and footer of every email.</div>
+                                </div>
 
                                 <div class="small p-3 rounded border bg-light">
                                     <span class="fw-semibold">Last check:</span>
