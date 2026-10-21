@@ -14,6 +14,7 @@ class NotificationSettings extends SettingsGroup
     // Settings table key for each property
     const KEYS = [
         'enabled' => 'notify_enabled',
+        'notifyUsers' => 'notify_users',
         'notifyTime' => 'notify_time',
         'recipients' => 'notify_recipients',
         'smtpHost' => 'smtp_host',
@@ -27,6 +28,7 @@ class NotificationSettings extends SettingsGroup
     ];
 
     public $enabled = false;
+    public $notifyUsers = true;    // Also email each borrower linked to the Google directory
     public $notifyTime = '15:30';  // HH:MM, 24-hour
     public $recipients = '';       // Comma-separated
     public $smtpHost = 'smtp-relay.gmail.com';
@@ -45,6 +47,7 @@ class NotificationSettings extends SettingsGroup
     public function applyPost(array $post): void
     {
         $this->enabled = !empty($post['notify_enabled']);
+        $this->notifyUsers = !empty($post['notify_users']);
         $this->notifyTime = substr(self::postedLine($post, 'notify_time'), 0, 5); // Drop seconds if the browser sends them
         $this->recipients = implode(', ', self::splitList(self::postedLine($post, 'notify_recipients')));
         $this->smtpHost = self::postedLine($post, 'smtp_host');

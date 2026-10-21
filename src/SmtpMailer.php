@@ -1,7 +1,8 @@
 <?php
 
 /**
- * Minimal SMTP client for sending plain-text mail through a relay such as Google's
+ * Minimal SMTP client for sending mail (plain text, or HTML with a plain-text
+ * alternative) through a relay such as Google's
  * smtp-relay.gmail.com. Supports STARTTLS, implicit SSL/TLS, and optional AUTH LOGIN
  * (leave the username blank when the relay authenticates by IP address).
  *
@@ -45,9 +46,12 @@ class SmtpMailer
     }
 
     /**
-     * @param string[] $recipients
+     * @param string[]    $recipients
+     * @param string      $textBody Plain-text body (the whole message, or the fallback for $htmlBody)
+     * @param string|null $htmlBody HTML version; sent as multipart/alternative with $textBody
+     * @param string[]    $replyTo  Addresses replies should go to (default: the From address)
      */
-    public function send(string $fromAddress, string $fromName, array $recipients, string $subject, string $body): void
+    public function send(string $fromAddress, string $fromName, array $recipients, string $subject, string $textBody, ?string $htmlBody = null, array $replyTo = []): void
     {
         $this->connect();
 
@@ -57,7 +61,7 @@ class SmtpMailer
                 $this->command("RCPT TO:<$recipient>", [250, 251]);
             }
             $this->command('DATA', [354]);
-            $this->command($this->buildMessage($fromAddress, $fromName, $recipients, $subject, $body) . "\r\n.", [250], 'message data');
+            $this->command($this->buildMessage($fromAddress, $fromName, $recipients, $subject, $textBody, $htmlBody, $replyTo) . "\r\n.", [250], 'message data');
 
             try {
                 $this->command('QUIT', [221]);
@@ -157,24 +161,49 @@ class SmtpMailer
         }
     }
 
-    private function buildMessage(string $fromAddress, string $fromName, array $recipients, string $subject, string $body): string
+    private function buildMessage(string $fromAddress, string $fromName, array $recipients, string $subject, string $textBody, ?string $htmlBody, array $replyTo): string
     {
         $headers = [
             'Date: ' . date('r'),
             'From: ' . $this->formatAddress($fromAddress, $fromName),
             'To: ' . implode(', ', $recipients),
-            'Subject: ' . $this->encodeHeader($subject),
-            'Message-ID: <' . bin2hex(random_bytes(16)) . '@' . $this->heloDomain . '>',
-            'MIME-Version: 1.0',
-            'Content-Type: text/plain; charset=UTF-8',
-            'Content-Transfer-Encoding: base64',
-            'Auto-Submitted: auto-generated',
         ];
-        $headers = str_replace(["\r", "\n"], '', $headers);
+        if ($replyTo) {
+            $headers[] = 'Reply-To: ' . implode(', ', $replyTo);
+        }
+        $headers[] = 'Subject: ' . $this->encodeHeader($subject);
+        $headers[] = 'Message-ID: <' . bin2hex(random_bytes(16)) . '@' . $this->heloDomain . '>';
+        $headers[] = 'MIME-Version: 1.0';
+        $headers[] = 'Auto-Submitted: auto-generated';
 
-        // Base64 body: safe for any characters and never needs SMTP dot-stuffing
+        if ($htmlBody === null) {
+            $headers = array_merge($headers, $this->partHeaders('text/plain'));
+            $body = $this->encodeBody($textBody);
+        } else {
+            // Mail clients show the last alternative they can display: plain text first, then HTML
+            $boundary = '=_' . bin2hex(random_bytes(12));
+            $headers[] = "Content-Type: multipart/alternative; boundary=\"$boundary\"";
+            $body = "--$boundary\r\n" . implode("\r\n", $this->partHeaders('text/plain')) . "\r\n\r\n" . $this->encodeBody($textBody) . "\r\n"
+                . "--$boundary\r\n" . implode("\r\n", $this->partHeaders('text/html')) . "\r\n\r\n" . $this->encodeBody($htmlBody) . "\r\n"
+                . "--$boundary--";
+        }
+
+        $headers = str_replace(["\r", "\n"], '', $headers);
+        return implode("\r\n", $headers) . "\r\n\r\n" . $body;
+    }
+
+    private function partHeaders(string $mimeType): array
+    {
+        return ["Content-Type: $mimeType; charset=UTF-8", 'Content-Transfer-Encoding: base64'];
+    }
+
+    /**
+     * Base64 bodies are safe for any characters and never need SMTP dot-stuffing.
+     */
+    private function encodeBody(string $body): string
+    {
         $body = str_replace(["\r\n", "\n"], "\r\n", $body);
-        return implode("\r\n", $headers) . "\r\n\r\n" . rtrim(chunk_split(base64_encode($body), 76, "\r\n"));
+        return rtrim(chunk_split(base64_encode($body), 76, "\r\n"));
     }
 
     private function formatAddress(string $address, string $name): string

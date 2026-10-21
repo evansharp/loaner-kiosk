@@ -39,6 +39,31 @@ $notifier = new OverdueNotifier($repository, $settingsRepository);
 $directorySync = new DirectorySync($peopleRepository, $settingsRepository, SERVICE_ACCOUNT_KEY_FILE);
 $controller = new AdminController($repository, $peopleRepository, $settingsRepository, $notifier, $directorySync, SERVICE_ACCOUNT_KEY_FILE);
 
+// Overdue email previews (shown in the notification card's preview window):
+// today's real overdue devices if there are any, otherwise sample data
+if (isset($_GET['preview_email'])) {
+    $config = NotificationSettings::load($settingsRepository);
+    $emails = new OverdueEmails();
+    $overdue = $repository->active();
+    $borrowers = OverdueEmails::byBorrower($overdue);
+
+    if ($_GET['preview_email'] === 'borrower') {
+        $borrowers = $borrowers ?: OverdueEmails::byBorrower(OverdueEmails::sampleOverdue(time()));
+        $email = $emails->borrower(reset($borrowers), $config);
+    } else {
+        $overdue = $overdue ?: OverdueEmails::sampleOverdue(time());
+        $status = [];
+        foreach (array_keys(OverdueEmails::byBorrower($overdue)) as $userId) {
+            $status[(string)$userId] = $config->notifyUsers ? OverdueEmails::BORROWER_EMAILED : OverdueEmails::BORROWER_EMAILS_OFF;
+        }
+        $email = $emails->admin($overdue, $status, $config, time());
+    }
+
+    header('Content-Type: text/html; charset=utf-8');
+    echo $email['html'];
+    exit;
+}
+
 // Handle Admin Actions (Delete / Edit / Settings)
 $alert = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

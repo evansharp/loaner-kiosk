@@ -285,15 +285,20 @@ foreach ($deviceStats as $asset => $seconds) {
                                     <input class="form-check-input" type="checkbox" role="switch" id="notifyEnabled" name="notify_enabled" value="1" <?= $notificationSettings->enabled ? 'checked' : '' ?>>
                                     <label class="form-check-label fw-semibold" for="notifyEnabled">Send a daily email about overdue devices</label>
                                 </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="notifyUsers" name="notify_users" value="1" <?= $notificationSettings->notifyUsers ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="notifyUsers">Also email each borrower at their Google directory address</label>
+                                    <div class="form-text mt-0">Only for checkouts linked to the directory. Their replies go to the recipients below.</div>
+                                </div>
                                 <div class="mb-3">
                                     <label for="notifyTime" class="form-label fw-semibold">Notify At</label>
                                     <input type="time" class="form-control" id="notifyTime" name="notify_time" value="<?= htmlspecialchars($notificationSettings->notifyTime) ?>" required>
                                     <div class="form-text">Devices still checked out at this time each day are reported. The kiosk checks every 5 minutes.</div>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="notifyRecipients" class="form-label fw-semibold">Recipients</label>
+                                    <label for="notifyRecipients" class="form-label fw-semibold">Administrator Recipients</label>
                                     <input type="text" class="form-control" id="notifyRecipients" name="notify_recipients" value="<?= htmlspecialchars($notificationSettings->recipients) ?>" placeholder="it@example.org, office@example.org" autocomplete="off">
-                                    <div class="form-text">Comma-separated email addresses.</div>
+                                    <div class="form-text">Comma-separated email addresses. They get the daily summary of all overdue devices.</div>
                                 </div>
 
                                 <div class="small p-3 rounded border bg-light">
@@ -369,7 +374,14 @@ foreach ($deviceStats as $asset => $seconds) {
                             </div>
                         </div>
 
-                        <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                        <div class="d-flex flex-wrap justify-content-end align-items-center gap-2 mt-4 pt-3 border-top">
+                            <span class="small text-muted me-1">Preview:</span>
+                            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#emailPreviewModal" data-preview="admin" data-title="Administrator summary email">
+                                <i class="bi bi-eye me-1"></i> Admin Email
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary me-auto" data-bs-toggle="modal" data-bs-target="#emailPreviewModal" data-preview="borrower" data-title="Borrower email">
+                                <i class="bi bi-eye me-1"></i> Borrower Email
+                            </button>
                             <button type="submit" name="action" value="test_email" class="btn btn-outline-primary">
                                 <i class="bi bi-send me-1"></i> Save &amp; Send Test Email
                             </button>
@@ -525,6 +537,24 @@ foreach ($deviceStats as $asset => $seconds) {
                 <button type="submit" class="btn btn-primary">Save Changes</button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Overdue Email Preview Modal -->
+<div class="modal fade" id="emailPreviewModal" tabindex="-1" aria-labelledby="emailPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title fw-bold" id="emailPreviewModalLabel">Email Preview</h5>
+                    <div class="small text-muted">Uses today's overdue devices if there are any, otherwise sample data.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="emailPreviewFrame" title="Email preview" style="width: 100%; height: 70vh; border: 0; display: block;"></iframe>
+            </div>
+        </div>
     </div>
 </div>
 

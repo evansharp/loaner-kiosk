@@ -199,6 +199,20 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // --- Overdue Email Preview ---
+    const emailPreviewModal = document.getElementById('emailPreviewModal');
+    if (emailPreviewModal) {
+        const frame = document.getElementById('emailPreviewFrame');
+        emailPreviewModal.addEventListener('show.bs.modal', event => {
+            const button = event.relatedTarget;
+            document.getElementById('emailPreviewModalLabel').textContent = button.getAttribute('data-title');
+            frame.src = 'admin.php?preview_email=' + encodeURIComponent(button.getAttribute('data-preview'));
+        });
+        emailPreviewModal.addEventListener('hidden.bs.modal', () => {
+            frame.src = 'about:blank';
+        });
+    }
+
     // --- Modal Populate for Photo View ---
     const photoModal = document.getElementById('photoModal');
     if (photoModal) {

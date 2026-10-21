@@ -9,7 +9,7 @@ A SPA to do self-serve signout of CMA loaner Chromebooks.
 - **Automatic State Reset:** Idle timer automatically resets the kiosk back to the asset scan step after 5 seconds of inactivity.
 - **Web Audio Context Feedback:** Plays unique success, warning, and error audio cues to assist users during self-checkout.
 - **Interactive Admin Dashboard:** Built-in charts (D3.js), top-user summaries, customizable activity log filters, verification photo modal viewer (1000px layout), and record management (edit/delete) in `admin.php`. Password protected, with automatic logout.
-- **Overdue Email Notifications:** A daily email, sent through Google's SMTP relay, listing devices still checked out at a configurable time of day. Configured on the admin page.
+- **Overdue Email Notifications:** At a configurable time each day, borrowers linked to the Google directory are emailed about their own overdue devices, and administrators get an HTML summary of everything still checked out. Sent through Google's SMTP relay; configured on the admin page.
 - **Google Directory Names:** The name field suggests people from chosen Google Workspace org units, and checkouts are linked to the person's Google account. Configured on the admin page.
 
 ---
@@ -84,7 +84,14 @@ Without the scripts, run `php -S localhost:8080 router.php` from the repo root (
 ---
 
 ## Overdue Email Notifications
-Configure under **Overdue Email Notifications** at the bottom of `admin.php`: the daily notify time, comma-separated recipients, and the SMTP relay connection. Use **Save & Send Test Email** to check the relay settings.
+Configure under **Overdue Email Notifications** at the bottom of `admin.php`: the daily notify time, the administrator recipients (comma-separated), whether to email borrowers, and the SMTP relay connection. Use **Save & Send Test Email** to check the relay settings, and the **Preview** buttons to see both emails.
+
+Each day at the notify time:
+
+- **Borrowers** whose checkouts are linked to the Google directory each get one email at their directory address, listing their overdue devices and asking them to return them. Replies go to the administrator recipients. Each borrower is emailed at most once a day; a failed borrower email is reported to the administrators, not retried.
+- **Administrators** get a summary of every device still checked out (including typed names not in the directory), showing whether each borrower was emailed.
+
+Both are HTML emails with a plain-text alternative. The templates are in `templates/emails/` (`layout.php` wraps `overdue_admin.php` and `overdue_borrower.php`); `src/OverdueEmails.php` prepares their data and the plain-text versions.
 
 1. **Set up the relay** in the Google Admin console under *Apps → Google Workspace → Gmail → Routing → SMTP relay service*. Either allow the kiosk network's public IP address (then leave the username and password blank), or require SMTP authentication (then enter a Workspace account and its password or app password). Requiring TLS is supported.
 2. **Typical settings:** host `smtp-relay.gmail.com`, port `587` with STARTTLS (or `465` with SSL/TLS). The From address must be in your Workspace domain. The EHLO domain defaults to the From address's domain, since Google's relay rejects `localhost`.

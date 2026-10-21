@@ -1,14 +1,19 @@
 <?php
 
 /**
- * Emails the configured recipients a list of devices still checked out at the
- * configured time of day. Meant to be run every few minutes (bin/notify_overdue.php);
+ * At the configured time of day, emails each borrower linked to the Google directory
+ * about their own overdue devices, then sends the administrators a summary of every
+ * device still checked out. Meant to be run every few minutes (bin/notify_overdue.php);
  * sends at most once per day.
  */
 class OverdueNotifier
 {
     // Settings table key for the day the daily check completed (Y-m-d)
     const LAST_RUN_DATE = 'notify_last_run_date';
+
+    // Settings table key for borrowers already emailed today: JSON {"date": "Y-m-d", "ids": [user_id, ...]}
+    // (so retrying a failed admin email doesn't email borrowers twice)
+    const BORROWERS_EMAILED = 'notify_borrowers_emailed';
 
     /** @var CheckoutRepository */
     private $checkouts;
@@ -27,9 +32,10 @@ class OverdueNotifier
     }
 
     /**
-     * Sends today's overdue email if it is due. Failures are retried on the next run.
+     * Sends today's overdue emails if they are due. A failed admin email is retried on the
+     * next run; a failed borrower email is reported in the admin email and not retried.
      *
-     * @param bool $force Ignore the enabled switch, notify time and once-per-day limit
+     * @param bool $force Ignore the enabled switch, notify time and once-per-day limits
      * @return string|null What happened, or null if nothing was due
      */
     public function run(int $now, bool $force = false): ?string
@@ -54,20 +60,77 @@ class OverdueNotifier
             return $this->record($now, 'No devices overdue; no email needed.', true);
         }
 
+        $emails = new OverdueEmails();
+        $mailer = $config->createMailer();
+
+        // Borrowers first, so the admin summary can say who was emailed
+        $borrowerStatus = $config->notifyUsers
+            ? $this->emailBorrowers($overdue, $config, $emails, $mailer, $now, $force)
+            : [];
+        $borrowerSummary = $config->notifyUsers ? ' ' . self::summarizeBorrowers($borrowerStatus) : '';
+
+        $email = $emails->admin($overdue, $borrowerStatus, $config, $now);
         try {
-            $config->createMailer()->send(
-                $config->fromAddress,
-                $config->fromName,
-                $config->recipientList(),
-                $this->overdueSubject($overdue, $config),
-                $this->overdueBody($overdue, $config, $now)
-            );
+            $mailer->send($config->fromAddress, $config->fromName, $config->recipientList(), $email['subject'], $email['text'], $email['html']);
         } catch (RuntimeException $e) {
-            return $this->record($now, 'Sending failed: ' . $e->getMessage(), false);
+            return $this->record($now, 'Sending failed: ' . $e->getMessage() . $borrowerSummary, false);
         }
 
         $count = count($overdue);
-        return $this->record($now, "Sent overdue notice for $count device" . ($count === 1 ? '' : 's') . ' to ' . implode(', ', $config->recipientList()) . '.', true);
+        return $this->record($now, "Sent overdue notice for $count device" . ($count === 1 ? '' : 's') . ' to ' . implode(', ', $config->recipientList()) . '.' . $borrowerSummary, true);
+    }
+
+    /**
+     * Emails each linked borrower about their own overdue devices, once per day.
+     *
+     * @return array user_id => OverdueEmails::BORROWER_EMAILED, or the error message
+     */
+    private function emailBorrowers(array $overdue, NotificationSettings $config, OverdueEmails $emails, SmtpMailer $mailer, int $now, bool $force): array
+    {
+        $today = date('Y-m-d', $now);
+        $state = json_decode((string)$this->settings->get(self::BORROWERS_EMAILED, ''), true);
+        $emailedToday = (is_array($state) && ($state['date'] ?? '') === $today) ? array_map('strval', $state['ids']) : [];
+
+        $status = [];
+        foreach (OverdueEmails::byBorrower($overdue) as $userId => $borrower) {
+            $userId = (string)$userId; // PHP turns numeric-string array keys into ints
+            if (!$force && in_array($userId, $emailedToday, true)) {
+                $status[$userId] = OverdueEmails::BORROWER_EMAILED;
+                continue;
+            }
+
+            $email = $emails->borrower($borrower, $config);
+            try {
+                // Replies ("I already returned it") go to the administrators
+                $mailer->send($config->fromAddress, $config->fromName, [$borrower['email']], $email['subject'], $email['text'], $email['html'], $config->recipientList());
+            } catch (RuntimeException $e) {
+                $status[$userId] = $e->getMessage();
+                continue;
+            }
+
+            $status[$userId] = OverdueEmails::BORROWER_EMAILED;
+            $emailedToday[] = $userId;
+            $this->settings->setMany([self::BORROWERS_EMAILED => json_encode(['date' => $today, 'ids' => array_values(array_unique($emailedToday))])]);
+        }
+
+        return $status;
+    }
+
+    private static function summarizeBorrowers(array $borrowerStatus): string
+    {
+        $total = count($borrowerStatus);
+        if ($total === 0) {
+            return 'No overdue borrowers are linked to the directory, so none were emailed.';
+        }
+
+        $failed = array_filter($borrowerStatus, function (string $status): bool {
+            return $status !== OverdueEmails::BORROWER_EMAILED;
+        });
+        $summary = 'Emailed ' . ($total - count($failed)) . " of $total borrower" . ($total === 1 ? '' : 's') . '.';
+        if ($failed) {
+            $summary .= ' Failed: ' . implode('; ', array_unique($failed));
+        }
+        return $summary;
     }
 
     /**
@@ -105,38 +168,5 @@ class OverdueNotifier
     private function record(int $now, string $message, bool $done): string
     {
         return $this->status->record($now, $message, $done, $done ? [self::LAST_RUN_DATE => date('Y-m-d', $now)] : []);
-    }
-
-    private function overdueSubject(array $overdue, NotificationSettings $config): string
-    {
-        $count = count($overdue);
-        return $count === 1
-            ? "Overdue loaner Chromebook: #{$overdue[0]['asset_number']} not returned by {$config->notifyTimeLabel()}"
-            : "Overdue loaner Chromebooks: $count not returned by {$config->notifyTimeLabel()}";
-    }
-
-    private function overdueBody(array $overdue, NotificationSettings $config, int $now): string
-    {
-        $count = count($overdue);
-        $lines = [
-            ($count === 1 ? 'This loaner Chromebook was' : "These $count loaner Chromebooks were")
-                . " not checked back in by {$config->notifyTimeLabel()} on " . date('l, F j, Y', $now) . ':',
-            '',
-        ];
-
-        foreach ($overdue as $record) {
-            $outTime = strtotime($record['checkout_time']);
-            $who = $record['user_name'] . (empty($record['user_email']) ? '' : " <{$record['user_email']}>");
-            $lines[] = "  #{$record['asset_number']}  $who"
-                . ' (checked out ' . date('M j, g:i A', $outTime) . '; out for ' . UsageStats::formatDuration($now - $outTime) . ')';
-        }
-
-        $lines[] = '';
-        $lines[] = 'Returned devices can be checked in at the kiosk, and records corrected on its admin page.';
-        $lines[] = '';
-        $lines[] = '-- ';
-        $lines[] = 'Sent automatically by the Loaner Chromebook Kiosk.';
-
-        return implode("\n", $lines) . "\n";
     }
 }
