@@ -26,13 +26,20 @@ class GoogleDirectoryClient
     /** @var int Seconds to wait for each request */
     private $timeout = 20;
 
+    /** @var string */
+    private $customerId;
+
     /**
-     * @param string|null $apiBase Override the API URL (the GOOGLE_DIRECTORY_API_BASE
-     *                             environment variable does the same; used for testing)
+     * @param string      $customerId The Workspace customer ID. A service account isn't a user in
+     *                                the domain, so Google may reject the 'my_customer' alias for it
+     *                                with "Invalid Input"
+     * @param string|null $apiBase    Override the API URL (the GOOGLE_DIRECTORY_API_BASE
+     *                                environment variable does the same; used for testing)
      */
-    public function __construct(ServiceAccountKey $key, ?string $apiBase = null)
+    public function __construct(ServiceAccountKey $key, string $customerId = '', ?string $apiBase = null)
     {
         $this->key = $key;
+        $this->customerId = $customerId !== '' ? $customerId : 'my_customer';
         $this->apiBase = rtrim($apiBase ?: (getenv('GOOGLE_DIRECTORY_API_BASE') ?: self::API_BASE), '/');
     }
 
@@ -48,7 +55,7 @@ class GoogleDirectoryClient
 
         do {
             $params = [
-                'customer' => 'my_customer',
+                'customer' => $this->customerId,
                 'query' => "orgUnitPath='$orgUnitPath'",
                 'maxResults' => 500,
                 'projection' => 'basic',

@@ -471,11 +471,17 @@ foreach ($deviceStats as $asset => $seconds) {
                                     <div class="form-text">The service account's JSON key from Google Cloud. It's stored on this Mac in the project's <code>private/</code> folder, readable only by the kiosk's user account, and is never committed to git.</div>
                                 </div>
 
+                                <div class="mb-3">
+                                    <label for="directoryCustomerId" class="form-label fw-semibold">Customer ID</label>
+                                    <input type="text" class="form-control font-monospace" id="directoryCustomerId" name="directory_customer_id" placeholder="C01abc23d" value="<?= htmlspecialchars($directorySettings->customerId) ?>">
+                                    <div class="form-text">Your Google Workspace customer ID, from <strong>Account → Account settings</strong> in the Google Admin console. Needed because the service account isn't a user in your domain.</div>
+                                </div>
+
                                 <div class="form-text">
                                     <i class="bi bi-info-circle me-1"></i>
                                     <strong>Setup:</strong>
                                     In a Google Cloud project, enable the <strong>Admin SDK API</strong>, create a service account, and download a JSON key for it.
-                                    Then in the Google Admin console, go to <strong>Account → Admin roles</strong>, create a role with only the <strong>Users → Read</strong> privilege, and assign it to the service account's email address.
+                                    Then in the Google Admin console, go to <strong>Account → Admin roles</strong>, create a role with only the <strong>Users → Read</strong> privilege, and assign it to the service account's email address. Enter your customer ID above.
                                     The directory is re-synced every 6 hours while the kiosk is running.
                                 </div>
                             </div>

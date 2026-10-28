@@ -63,10 +63,15 @@ class DirectorySync
                 return $this->status->record($now, 'Not synced: no service account key has been uploaded.', false);
             }
 
-            $client = new GoogleDirectoryClient($key);
+            $client = new GoogleDirectoryClient($key, $config->customerId);
             $people = [];
             foreach ($orgUnits as $orgUnit) {
-                foreach ($client->listUsers($orgUnit) as $person) {
+                try {
+                    $users = $client->listUsers($orgUnit);
+                } catch (RuntimeException $e) {
+                    throw new RuntimeException("$orgUnit: " . rtrim($e->getMessage(), '.') . '.' . self::hint($e->getMessage(), $config->customerId), 0, $e);
+                }
+                foreach ($users as $person) {
                     $people[$person['google_id']] = $person; // Org units may overlap
                 }
             }
@@ -91,6 +96,22 @@ class DirectorySync
             true,
             [self::LAST_SUCCESS_AT => date('Y-m-d H:i:s', $now)]
         );
+    }
+
+    /**
+     * Likely fixes for Google's vaguer errors.
+     */
+    private static function hint(string $error, string $customerId): string
+    {
+        if (strpos($error, '(400)') !== false) {
+            return $customerId === ''
+                ? ' Enter your customer ID (Admin console → Account → Account settings), and check that the org unit path exists.'
+                : ' Check the customer ID, and that the org unit path exists.';
+        }
+        if (strpos($error, '(403)') !== false) {
+            return ' Check that the service account has been assigned an admin role with Users → Read.';
+        }
+        return '';
     }
 
     public function lastResult(): ?array

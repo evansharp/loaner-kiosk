@@ -10,16 +10,19 @@ class DirectorySettings extends SettingsGroup
         'enabled' => 'directory_enabled',
         'orgUnits' => 'directory_org_units',
         'allowTypedNames' => 'directory_allow_typed_names',
+        'customerId' => 'directory_customer_id',
     ];
 
     public $enabled = false;
     public $orgUnits = '';            // One org unit path per line, e.g. /Students
     public $allowTypedNames = true;   // Allow checkouts to names not in the directory
+    public $customerId = '';          // Google Workspace customer ID, e.g. C01abc23d
 
     public function applyPost(array $post): void
     {
         $this->enabled = !empty($post['directory_enabled']);
         $this->allowTypedNames = !empty($post['directory_allow_typed_names']);
+        $this->customerId = self::postedLine($post, 'directory_customer_id');
 
         // Normalize: one path per line, accepting commas too; ensure a leading slash, no trailing slash
         $paths = preg_split('/[\r\n,]+/', (string)($post['directory_org_units'] ?? ''));
@@ -47,6 +50,10 @@ class DirectorySettings extends SettingsGroup
             if (preg_match('/[\'"\\\\]/', $path)) {
                 $errors[] = "Org unit \"$path\" can't contain quotes or backslashes.";
             }
+        }
+
+        if ($this->customerId !== '' && !preg_match('/^C[0-9a-z]+$/i', $this->customerId)) {
+            $errors[] = 'The customer ID should look like C01abc23d (Admin console → Account → Account settings).';
         }
 
         if ($this->enabled) {
