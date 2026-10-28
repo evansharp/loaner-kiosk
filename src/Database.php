@@ -39,6 +39,9 @@ class Database
             active INTEGER NOT NULL DEFAULT 1
         )");
 
+        // Databases first created by older admin.php versions lack photo_uuid
+        self::addColumnIfMissing($pdo, 'checkouts', 'photo_uuid', 'TEXT DEFAULT NULL');
+
         // Checkouts linked to a directory person (both NULL for typed names and older records)
         self::addColumnIfMissing($pdo, 'checkouts', 'user_id', 'TEXT DEFAULT NULL');
         self::addColumnIfMissing($pdo, 'checkouts', 'user_email', 'TEXT DEFAULT NULL');

@@ -23,8 +23,14 @@ spl_autoload_register(function (string $class): void {
 if (!is_dir(PRIVATE_DIR)) {
     mkdir(PRIVATE_DIR, 0700, true);
 }
-foreach (['chromebooks.sqlite', 'checkout_verification'] as $legacyName) {
+// (SQLite's journal/WAL files go first, so the database never arrives without them.
+// @: the kiosk page and background jobs can race to move the same file; one of them wins.)
+$legacyNames = [
+    'chromebooks.sqlite-journal', 'chromebooks.sqlite-wal', 'chromebooks.sqlite-shm',
+    'chromebooks.sqlite', 'checkout_verification',
+];
+foreach ($legacyNames as $legacyName) {
     if (file_exists(APP_ROOT . "/$legacyName") && !file_exists(PRIVATE_DIR . "/$legacyName")) {
-        rename(APP_ROOT . "/$legacyName", PRIVATE_DIR . "/$legacyName");
+        @rename(APP_ROOT . "/$legacyName", PRIVATE_DIR . "/$legacyName");
     }
 }
