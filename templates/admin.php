@@ -9,8 +9,12 @@
  * @var PhotoStore  $photos
  * @var string      $csrfToken    Included in every form; checked by public/admin.php
  * @var NotificationSettings $notificationSettings
+ * @var string      $reportRange       Selected usage report range (a key of UsageReport::RANGES)
+ * @var string      $reportRecipients  Comma-separated addresses for the usage report
+ * @var int|null    $reportLastSentAt  When a usage report last sent successfully
+ * @var array|null  $lastReport        ['message', 'at', 'ok'] from UsageReport::lastResult()
  * @var array|null  $lastNotification  ['message', 'at', 'ok'] from OverdueNotifier::lastResult()
- * @var bool        $directoryEnabled  Whether the edit form suggests directory names
+ * @var bool        $directoryEnabled  Whether the edit form can search the directory to link records
  * @var DirectorySettings $directorySettings
  * @var array|null  $lastDirectorySync ['message', 'at', 'ok'] from DirectorySync::lastResult()
  * @var int         $directoryPeopleCount
@@ -260,7 +264,74 @@ foreach ($deviceStats as $asset => $seconds) {
         </div>
     </div>
 
-    <!-- Row 4: Overdue Email Notification Settings -->
+    <!-- Row 4: Usage Report Email -->
+    <div class="row g-4 mt-0" id="usageReport">
+        <div class="col-12">
+            <div class="card admin-card">
+                <div class="card-body p-4">
+                    <h5 class="card-title fw-bold mb-3"><i class="bi bi-file-earmark-bar-graph-fill me-2 text-primary"></i>Email a Usage Report</h5>
+
+                    <?php if ($alert && $alert->section === 'report'): ?>
+                        <div class="alert alert-<?= $alert->type ?> alert-dismissible fade show mb-4" role="alert">
+                            <?= htmlspecialchars($alert->message) ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    <?php endif; ?>
+
+                    <form method="POST" action="admin.php#usageReport">
+                        <?= $csrfField ?>
+                        <div class="row g-3 align-items-start">
+                            <div class="col-lg-5">
+                                <label for="reportRecipients" class="form-label fw-semibold">Send To</label>
+                                <input type="text" class="form-control" id="reportRecipients" name="report_recipients" value="<?= htmlspecialchars($reportRecipients) ?>" placeholder="principal@example.org" required autocomplete="off">
+                                <div class="form-text">Comma-separated email addresses.</div>
+                            </div>
+                            <div class="col-lg-4">
+                                <label for="reportRange" class="form-label fw-semibold">Time Range</label>
+                                <select class="form-select" id="reportRange" name="report_range">
+                                    <?php foreach (UsageReport::RANGES as $value => $label): ?>
+                                        <option value="<?= $value ?>" <?= $reportRange === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="form-text">
+                                    School year: since <?= htmlspecialchars(date('M j, Y', UsageReport::schoolYearStart(time()))) ?>.
+                                    Last report: <?= $reportLastSentAt ? htmlspecialchars(date('M j, Y — g:i A', $reportLastSentAt)) : 'never sent (covers all time)' ?>.
+                                </div>
+                            </div>
+                            <div class="col-lg-3">
+                                <div class="small p-3 rounded border bg-light">
+                                    <span class="fw-semibold">Last attempt:</span>
+                                    <?php if ($lastReport): ?>
+                                        <?= htmlspecialchars(date('M j, Y — g:i A', strtotime($lastReport['at']))) ?><br>
+                                        <span class="<?= $lastReport['ok'] ? 'text-success' : 'text-danger' ?>"><?= htmlspecialchars($lastReport['message']) ?></span>
+                                    <?php else: ?>
+                                        <span class="text-muted">Never sent.</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-text mt-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Includes totals, the top <?= UsageReport::TOP_COUNT ?> devices and users, and every user's total time checked out, most to least.
+                            Sent through the SMTP relay set up under Overdue Email Notifications.
+                        </div>
+
+                        <div class="d-flex flex-wrap justify-content-end align-items-center gap-2 mt-4 pt-3 border-top">
+                            <button type="button" class="btn btn-outline-secondary me-auto" data-bs-toggle="modal" data-bs-target="#emailPreviewModal" data-preview="report" data-title="Usage report email">
+                                <i class="bi bi-eye me-1"></i> Preview Report
+                            </button>
+                            <button type="submit" name="action" value="send_report" class="btn btn-primary">
+                                <i class="bi bi-send me-1"></i> Send Report
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 5: Overdue Email Notification Settings -->
     <div class="row g-4 mt-0" id="notificationSettings">
         <div class="col-12">
             <div class="card admin-card">
@@ -400,7 +471,7 @@ foreach ($deviceStats as $asset => $seconds) {
         </div>
     </div>
 
-    <!-- Row 5: Google Directory Settings -->
+    <!-- Row 6: Google Directory Settings -->
     <div class="row g-4 mt-0" id="directorySettings">
         <div class="col-12">
             <div class="card admin-card">
@@ -521,16 +592,32 @@ foreach ($deviceStats as $asset => $seconds) {
                 </div>
                 <div class="mb-3">
                     <label for="editUserName" class="form-label fw-semibold">Person's Name</label>
-                    <div class="position-relative">
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-person" id="editUserIcon"></i></span>
-                            <input type="text" class="form-control" id="editUserName" name="user_name" required autocomplete="off">
-                        </div>
-                        <!-- Directory name suggestions (filled by name-autocomplete.js) -->
-                        <ul id="editUserSuggestions" class="dropdown-menu w-100 user-suggestions" role="listbox"></ul>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person" id="editUserIcon"></i></span>
+                        <input type="text" class="form-control" id="editUserName" name="user_name" required autocomplete="off">
                     </div>
                     <input type="hidden" name="user_id" id="editUserId">
-                    <div class="form-text" id="editUserLink"></div>
+                </div>
+                <div class="mb-3">
+                    <label<?= $directoryEnabled ? ' for="editLinkSearch"' : '' ?> class="form-label fw-semibold">Google Directory User</label>
+                    <?php if ($directoryEnabled): ?>
+                        <div class="position-relative">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-search" id="editLinkIcon"></i></span>
+                                <input type="text" class="form-control" id="editLinkSearch" placeholder="Search by name or email to link this record" autocomplete="off">
+                            </div>
+                            <!-- Directory suggestions (filled by name-autocomplete.js) -->
+                            <ul id="editLinkSuggestions" class="dropdown-menu w-100 user-suggestions" role="listbox"></ul>
+                        </div>
+                    <?php endif; ?>
+                    <div class="form-text d-flex align-items-center gap-2">
+                        <span id="editUserLink"></span>
+                        <button type="button" class="btn btn-link btn-sm p-0 ms-auto" id="editUnlinkBtn">Unlink</button>
+                    </div>
+                    <div class="form-check mt-2" id="editLinkMatchingGroup">
+                        <input class="form-check-input" type="checkbox" name="link_matching" value="1" id="editLinkMatching">
+                        <label class="form-check-label small" for="editLinkMatching" id="editLinkMatchingLabel"></label>
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="editCheckoutTime" class="form-label fw-semibold">Check-Out Time</label>

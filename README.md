@@ -9,6 +9,7 @@ A SPA to do self-serve signout of CMA loaner Chromebooks.
 - **Automatic State Reset:** Idle timer automatically resets the kiosk back to the asset scan step after 5 seconds of inactivity.
 - **Web Audio Context Feedback:** Plays unique success, warning, and error audio cues to assist users during self-checkout.
 - **Interactive Admin Dashboard:** Built-in charts (D3.js), top-user summaries, customizable activity log filters, verification photo modal viewer (1000px layout), and record management (edit/delete) in `admin.php`. Password protected, with automatic logout.
+- **Usage Report Emails:** Send a report of checkout totals, the top 5 devices and users, and every user's total time checked out to any address, for all time, this school year, or since the last report. Sent from the admin page.
 - **Overdue Email Notifications:** At a configurable time each day, borrowers linked to the Google directory are emailed about their own overdue devices, and administrators get an HTML summary of everything still checked out. Sent through Google's SMTP relay; configured on the admin page.
 - **Google Directory Names:** The name field suggests people from chosen Google Workspace org units, and checkouts are linked to the person's Google account. Configured on the admin page.
 
@@ -100,6 +101,17 @@ Both are HTML emails with a plain-text alternative. The templates are in `templa
 
 ---
 
+## Usage Report Emails
+Under **Email a Usage Report** on `admin.php`, enter one or more addresses, choose a time range, and click **Send Report** (or **Preview Report** to see it first). It uses the SMTP relay set up under Overdue Email Notifications, so set that up first.
+
+- **All time:** every record.
+- **This school year:** since midnight on the most recent September 1st.
+- **Since last email report:** since the last report that was sent successfully, whatever range that one used. All time until one has been sent.
+
+The report lists the number of checkouts, total time out, number of borrowers, and devices out right now. Then it shows the top 5 devices and users by time, and every user's total time and number of checkouts, most to least. A checkout that started before the period counts only its time inside it, and devices still out count up to the moment the report is sent. As on the dashboard, records linked to the Google directory are totalled by person; typed names that aren't linked are totalled by name, so link them first (see *Linking old records* below).
+
+---
+
 ## Google Directory Names
 Configure under **Google Directory** at the bottom of `admin.php`. When it's on, students start typing their name and pick it from a list (arrow keys and Enter, or tap). The checkout records their Google account ID and email along with their name.
 
@@ -107,6 +119,7 @@ Configure under **Google Directory** at the bottom of `admin.php`. When it's on,
 2. **Google Admin console:** under *Account → Admin roles*, create a role with only the **Users → Read** privilege, and assign it to the service account's email address. No domain-wide delegation is needed.
 3. **Admin page:** upload the key, enter your **Customer ID** (*Account → Account settings* in the Admin console; Google may reject the sync with "Invalid Input" without it), list the org units to sync (one per line, e.g. `/Students`; sub-units are included), turn it on, and click **Save & Sync Now**.
 4. **Typed names:** with *Also allow typed names* on, people not in the directory (guests, new students) can still type a full name. The list then offers "Use what I typed", and those checkouts aren't linked. With it off, a name must be chosen from the list. A typed name that exactly matches one person in the directory is linked automatically.
+5. **Linking old records:** in a record's **Edit** dialog, search **Google Directory User** by name or email and pick the person. This links the record and replaces the typed name with their directory name, so their usage is totalled together. Tick *Also link other unlinked records named "…"* to do the same for every other unlinked record with that exact typed name (case-insensitive). **Unlink** removes the link and keeps the name.
 
 Syncing runs every 6 hours from `scripts/kiosk_worker.sh` (failures retry after 30 minutes): `php bin/sync_directory.php --force` syncs immediately. Only active (not suspended or archived) users are suggested. People who leave the synced org units stay in the local table, marked inactive, so old records still show their name. A sync that finds nobody (usually a mistyped org unit) changes nothing.
 

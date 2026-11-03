@@ -8,23 +8,36 @@ class UsageStats
     /** @var array<string, int> asset_number => total_seconds, sorted descending */
     public $deviceSeconds = [];
 
+    /** @var int Checkouts with time in the period */
+    public $checkoutCount = 0;
+
     /**
-     * @var array[] user key => ['name', 'email', 'seconds']. Directory-linked checkouts are
-     *              grouped by Google ID (so renames don't split a person); typed names by name.
+     * @var array[] user key => ['name', 'email', 'seconds', 'checkouts']. Directory-linked checkouts
+     *              are grouped by Google ID (so renames don't split a person); typed names by name.
      */
     private $users = [];
 
     /**
-     * @param array $records Checkout rows, newest first; active checkouts count up to $now
+     * @param array    $records Checkout rows, newest first; active checkouts count up to $now
+     * @param int|null $since   Only count time after this (a checkout that started earlier counts
+     *                          from here); null for all time
      */
-    public function __construct(array $records, int $now)
+    public function __construct(array $records, int $now, ?int $since = null)
     {
         foreach ($records as $record) {
             $outTime = strtotime($record['checkout_time']);
             $inTime = $record['checkin_time'] ? strtotime($record['checkin_time']) : $now;
 
+            if ($since !== null && $outTime && $inTime) {
+                if ($inTime <= $since) {
+                    continue; // Over before the period began
+                }
+                $outTime = max($outTime, $since);
+            }
+
             if ($outTime && $inTime && $inTime >= $outTime) {
                 $duration = $inTime - $outTime;
+                $this->checkoutCount++;
 
                 $asset = $record['asset_number'];
                 $this->deviceSeconds[$asset] = ($this->deviceSeconds[$asset] ?? 0) + $duration;
@@ -32,9 +45,10 @@ class UsageStats
                 $userKey = !empty($record['user_id']) ? 'id:' . $record['user_id'] : 'name:' . $record['user_name'];
                 if (!isset($this->users[$userKey])) {
                     // Records are newest first, so this is the person's latest name
-                    $this->users[$userKey] = ['name' => $record['user_name'], 'email' => $record['user_email'] ?? null, 'seconds' => 0];
+                    $this->users[$userKey] = ['name' => $record['user_name'], 'email' => $record['user_email'] ?? null, 'seconds' => 0, 'checkouts' => 0];
                 }
                 $this->users[$userKey]['seconds'] += $duration;
+                $this->users[$userKey]['checkouts']++;
             }
         }
 
@@ -42,15 +56,23 @@ class UsageStats
     }
 
     /**
-     * @return array[] ['name', 'email' (null for typed names), 'seconds'], most time first
+     * @return array[] ['name', 'email' (null for typed names), 'seconds', 'checkouts'], most time first
      */
-    public function topUsers(int $limit): array
+    public function users(): array
     {
         $users = array_values($this->users);
         usort($users, function (array $a, array $b): int {
             return $b['seconds'] <=> $a['seconds'];
         });
-        return array_slice($users, 0, $limit);
+        return $users;
+    }
+
+    /**
+     * @return array[] The first $limit of users()
+     */
+    public function topUsers(int $limit): array
+    {
+        return array_slice($this->users(), 0, $limit);
     }
 
     /**
