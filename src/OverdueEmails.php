@@ -11,12 +11,12 @@ class OverdueEmails
     const BORROWER_EMAILED = 'emailed';
     const BORROWER_EMAILS_OFF = 'off';
 
-    /** @var string */
-    private $templateDir;
+    /** @var EmailRenderer */
+    private $renderer;
 
     public function __construct(?string $templateDir = null)
     {
-        $this->templateDir = $templateDir ?: dirname(__DIR__) . '/templates/emails';
+        $this->renderer = new EmailRenderer($templateDir);
     }
 
     /**
@@ -80,8 +80,8 @@ class OverdueEmails
 
         return [
             'subject' => $subject,
-            'text' => $this->textWithFooter($text, $config),
-            'html' => $this->renderEmail('overdue_admin', $subject, $intro, $config, [
+            'text' => EmailRenderer::text($text, $config->schoolName),
+            'html' => $this->renderer->html('overdue_admin', $subject, $intro, $config->schoolName, [
                 'heading' => $count === 1 ? '1 loaner Chromebook not returned' : "$count loaner Chromebooks not returned",
                 'intro' => $intro,
                 'rows' => $rows,
@@ -129,8 +129,8 @@ class OverdueEmails
 
         return [
             'subject' => $subject,
-            'text' => $this->textWithFooter($text, $config),
-            'html' => $this->renderEmail('overdue_borrower', $subject, $intro, $config, [
+            'text' => EmailRenderer::text($text, $config->schoolName),
+            'html' => $this->renderer->html('overdue_borrower', $subject, $intro, $config->schoolName, [
                 'heading' => $count === 1 ? 'Please return your loaner Chromebook' : 'Please return your loaner Chromebooks',
                 'name' => $borrower['name'],
                 'intro' => $intro,
@@ -168,35 +168,5 @@ class OverdueEmails
             return ['Borrower not emailed (borrower emails are off)', 'muted'];
         }
         return ["Couldn't email borrower: " . $status, 'error'];
-    }
-
-    private function textWithFooter(array $lines, NotificationSettings $config): string
-    {
-        $lines[] = '';
-        $lines[] = '-- ';
-        $lines[] = $config->schoolName . ' - sent automatically by the Loaner Chromebook Kiosk.';
-        return implode("\n", $lines) . "\n";
-    }
-
-    /**
-     * Renders a content template inside the shared email layout.
-     */
-    private function renderEmail(string $template, string $title, string $preheader, NotificationSettings $config, array $vars): string
-    {
-        $content = $this->render($template, $vars);
-        return $this->render('layout', [
-            'title' => $title,
-            'preheader' => $preheader,
-            'content' => $content,
-            'schoolName' => $config->schoolName,
-        ]);
-    }
-
-    private function render(string $template, array $vars): string
-    {
-        extract($vars, EXTR_SKIP);
-        ob_start();
-        require "{$this->templateDir}/$template.php";
-        return ob_get_clean();
     }
 }

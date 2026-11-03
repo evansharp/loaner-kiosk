@@ -12,12 +12,15 @@
  * @param {boolean}          options.allowTyped      Offer "Use what I typed" for names not in the directory
  * @param {boolean}          [options.includeInactive] Also suggest people no longer active (admins only)
  * @param {Function}         [options.onLinkChange]  Called with the chosen person, or null when unlinked
+ * @param {boolean}          [options.unlinkOnInput=true] Typing unlinks the chosen person (false for a
+ *                                                  search-only field, where the link changes only on a pick)
  * @returns {{markLinked: Function}} Call markLinked(bool) after setting the fields from code
  */
 function setupNameAutocomplete(options) {
     const { input, userIdInput, list, icon, allowTyped } = options;
     const includeInactive = !!options.includeInactive;
     const onLinkChange = options.onLinkChange || (() => {});
+    const unlinkOnInput = options.unlinkOnInput !== false;
 
     let items = [];          // [{id, name, email, active}], plus {typed: true, name} for "use what I typed"
     let activeIndex = -1;
@@ -129,11 +132,13 @@ function setupNameAutocomplete(options) {
 
     input.addEventListener('input', () => {
         // Edited text no longer matches a chosen person
-        if (userIdInput.value !== '') {
-            userIdInput.value = '';
-            onLinkChange(null);
+        if (unlinkOnInput) {
+            if (userIdInput.value !== '') {
+                userIdInput.value = '';
+                onLinkChange(null);
+            }
+            markLinked(false);
         }
-        markLinked(false);
 
         clearTimeout(debounceTimer);
         const query = input.value.trim();

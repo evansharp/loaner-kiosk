@@ -75,6 +75,25 @@ class CheckoutRepository
         ]);
     }
 
+    /**
+     * Links every unlinked record whose name matches $typedName (ignoring case and surrounding
+     * spaces) to a directory person, replacing the name with theirs.
+     *
+     * @return int Number of records linked
+     */
+    public function linkUnlinkedByName(string $typedName, string $userName, string $userId, ?string $userEmail): int
+    {
+        $stmt = $this->pdo->prepare("UPDATE checkouts SET user_name = :name, user_id = :user_id, user_email = :user_email
+                                     WHERE (user_id IS NULL OR user_id = '') AND LOWER(TRIM(user_name)) = LOWER(TRIM(:typed))");
+        $stmt->execute([
+            ':name' => $userName,
+            ':user_id' => $userId,
+            ':user_email' => $userEmail,
+            ':typed' => $typedName
+        ]);
+        return $stmt->rowCount();
+    }
+
     public function delete(int $id): void
     {
         $stmt = $this->pdo->prepare("DELETE FROM checkouts WHERE id = :id");

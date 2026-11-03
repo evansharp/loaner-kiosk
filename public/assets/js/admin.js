@@ -143,6 +143,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const editUserId = document.getElementById('editUserId');
         const editUserIcon = document.getElementById('editUserIcon');
         const editUserLink = document.getElementById('editUserLink');
+        const editLinkSearch = document.getElementById('editLinkSearch'); // Only when the directory is on
+        const editUnlinkBtn = document.getElementById('editUnlinkBtn');
+        const editLinkMatchingGroup = document.getElementById('editLinkMatchingGroup');
+        const editLinkMatching = document.getElementById('editLinkMatching');
+        const editLinkMatchingLabel = document.getElementById('editLinkMatchingLabel');
+
+        // The record as it was when the modal opened
+        let originalName = '';
+        let originalUserId = '';
 
         // Says which directory person (if any) the record will be saved as linked to
         function showLink(email) {
@@ -152,50 +161,56 @@ document.addEventListener("DOMContentLoaded", () => {
                 strong.textContent = email;
                 editUserLink.append('Linked to ', strong, ' in the Google directory.');
             } else {
-                editUserLink.textContent = document.body.dataset.directory === 'on'
-                    ? 'Not linked. Start typing to choose someone from the directory, or enter any name.'
+                editUserLink.textContent = editLinkSearch
+                    ? 'Not linked. Search above to link this record to someone in the directory.'
                     : 'Not linked to the Google directory.';
             }
+            editUserIcon.className = email ? 'bi bi-person-check-fill text-success' : 'bi bi-person';
+            editUnlinkBtn.classList.toggle('d-none', !email);
+
+            // A newly linked record can bring along the other unlinked records the student typed the same way
+            const newlyLinked = editUserId.value !== '' && editUserId.value !== originalUserId;
+            editLinkMatchingGroup.classList.toggle('d-none', !newlyLinked);
+            if (!newlyLinked) editLinkMatching.checked = false;
+            editLinkMatchingLabel.textContent = `Also link other unlinked records named “${originalName}” (their names will be replaced too)`;
         }
 
-        let nameAutocomplete = null;
-        if (document.body.dataset.directory === 'on') {
-            nameAutocomplete = setupNameAutocomplete({
-                input: editUserName,
+        if (editLinkSearch) {
+            setupNameAutocomplete({
+                input: editLinkSearch,
                 userIdInput: editUserId,
-                list: document.getElementById('editUserSuggestions'),
+                list: document.getElementById('editLinkSuggestions'),
                 icon: editUserIcon,
-                allowTyped: true,
+                allowTyped: false,
                 includeInactive: true, // Old records may belong to people who have since left
-                onLinkChange: person => showLink(person ? person.email : null)
-            });
-        } else {
-            // No suggestions, but a hand-edited name must still drop the old link
-            editUserName.addEventListener('input', () => {
-                if (editUserId.value !== '') {
-                    editUserId.value = '';
-                    editUserIcon.className = 'bi bi-person';
-                    showLink(null);
+                unlinkOnInput: false,  // Searching keeps the current link until someone is picked
+                onLinkChange: person => {
+                    // Linking replaces the typed name with the directory name
+                    editUserName.value = person.name;
+                    editLinkSearch.value = '';
+                    showLink(person.email);
                 }
             });
         }
+
+        editUnlinkBtn.addEventListener('click', () => {
+            editUserId.value = '';
+            showLink(null);
+        });
 
         editModal.addEventListener('show.bs.modal', event => {
             const button = event.relatedTarget;
             document.getElementById('editRecordId').value = button.getAttribute('data-id');
             document.getElementById('editAssetNumber').value = button.getAttribute('data-asset');
-            editUserName.value = button.getAttribute('data-user');
-            editUserId.value = button.getAttribute('data-user-id');
+            originalName = button.getAttribute('data-user');
+            originalUserId = button.getAttribute('data-user-id');
+            editUserName.value = originalName;
+            editUserId.value = originalUserId;
             document.getElementById('editCheckoutTime').value = button.getAttribute('data-checkout');
             document.getElementById('editCheckinTime').value = button.getAttribute('data-checkin');
+            if (editLinkSearch) editLinkSearch.value = '';
 
-            const linked = editUserId.value !== '';
-            if (nameAutocomplete) {
-                nameAutocomplete.markLinked(linked);
-            } else {
-                editUserIcon.className = linked ? 'bi bi-person-check-fill text-success' : 'bi bi-person';
-            }
-            showLink(linked ? button.getAttribute('data-user-email') : null);
+            showLink(originalUserId !== '' ? button.getAttribute('data-user-email') : null);
         });
     }
 
@@ -206,7 +221,11 @@ document.addEventListener("DOMContentLoaded", () => {
         emailPreviewModal.addEventListener('show.bs.modal', event => {
             const button = event.relatedTarget;
             document.getElementById('emailPreviewModalLabel').textContent = button.getAttribute('data-title');
-            frame.src = 'admin.php?preview_email=' + encodeURIComponent(button.getAttribute('data-preview'));
+            let url = 'admin.php?preview_email=' + encodeURIComponent(button.getAttribute('data-preview'));
+            if (button.getAttribute('data-preview') === 'report') {
+                url += '&range=' + encodeURIComponent(document.getElementById('reportRange').value);
+            }
+            frame.src = url;
         });
         emailPreviewModal.addEventListener('hidden.bs.modal', () => {
             frame.src = 'about:blank';

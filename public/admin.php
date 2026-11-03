@@ -37,12 +37,20 @@ $peopleRepository = new PeopleRepository($pdo);
 $photos = new PhotoStore(PHOTO_DIR, 'photo.php?f=');
 $notifier = new OverdueNotifier($repository, $settingsRepository);
 $directorySync = new DirectorySync($peopleRepository, $settingsRepository, SERVICE_ACCOUNT_KEY_FILE);
-$controller = new AdminController($repository, $peopleRepository, $settingsRepository, $notifier, $directorySync, SERVICE_ACCOUNT_KEY_FILE);
+$usageReport = new UsageReport($repository, $settingsRepository);
+$controller = new AdminController($repository, $peopleRepository, $settingsRepository, $notifier, $directorySync, $usageReport, SERVICE_ACCOUNT_KEY_FILE);
 
-// Overdue email previews (shown in the notification card's preview window):
-// today's real overdue devices if there are any, otherwise sample data
+// Email previews (shown in the preview window). The usage report uses real data for the
+// chosen range; overdue emails use today's overdue devices if there are any, otherwise sample data
 if (isset($_GET['preview_email'])) {
     $config = NotificationSettings::load($settingsRepository);
+    if ($_GET['preview_email'] === 'report') {
+        $range = isset(UsageReport::RANGES[$_GET['range'] ?? '']) ? $_GET['range'] : 'all';
+        header('Content-Type: text/html; charset=utf-8');
+        echo $usageReport->compose($range, time(), $config->schoolName)['html'];
+        exit;
+    }
+
     $emails = new OverdueEmails();
     $overdue = $repository->active();
     $borrowers = OverdueEmails::byBorrower($overdue);
@@ -80,6 +88,12 @@ $allRecords = $repository->allByCheckoutTime();
 $stats = new UsageStats($allRecords, time());
 $deviceStats = $stats->deviceSeconds;
 $topUsers = $stats->topUsers(5);
+
+// Usage report form (a report that wasn't sent keeps what was entered)
+$reportRange = $controller->reportDraft['range'] ?? 'school_year';
+$reportRecipients = $controller->reportDraft['recipients'] ?? $usageReport->savedRecipients(NotificationSettings::load($settingsRepository));
+$reportLastSentAt = $usageReport->lastSentAt();
+$lastReport = $usageReport->lastResult();
 
 // Overdue notification settings (unsaved values are redisplayed if they failed validation)
 $notificationSettings = $controller->settingsDraft ?: NotificationSettings::load($settingsRepository);

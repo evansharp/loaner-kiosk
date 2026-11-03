@@ -1,8 +1,8 @@
 <?php
 
 /**
- * Handles admin actions: record management (Delete / Edit), notification settings,
- * and Google directory settings.
+ * Handles admin actions: record management (Delete / Edit), usage report emails,
+ * notification settings, and Google directory settings.
  */
 class AdminController
 {
@@ -24,6 +24,9 @@ class AdminController
     /** @var DirectorySync */
     private $directorySync;
 
+    /** @var UsageReport */
+    private $report;
+
     /** @var string */
     private $keyFile;
 
@@ -33,13 +36,17 @@ class AdminController
     /** @var DirectorySettings|null Submitted directory settings that failed validation, to redisplay unsaved */
     public $directoryDraft = null;
 
-    public function __construct(CheckoutRepository $checkouts, PeopleRepository $people, SettingsRepository $settings, OverdueNotifier $notifier, DirectorySync $directorySync, string $keyFile)
+    /** @var array|null ['range', 'recipients'] submitted with a report that wasn't sent, to redisplay */
+    public $reportDraft = null;
+
+    public function __construct(CheckoutRepository $checkouts, PeopleRepository $people, SettingsRepository $settings, OverdueNotifier $notifier, DirectorySync $directorySync, UsageReport $report, string $keyFile)
     {
         $this->checkouts = $checkouts;
         $this->people = $people;
         $this->settings = $settings;
         $this->notifier = $notifier;
         $this->directorySync = $directorySync;
+        $this->report = $report;
         $this->keyFile = $keyFile;
     }
 
@@ -66,11 +73,23 @@ class AdminController
             $checkinTime = ($checkinTime === '') ? null : $checkinTime;
 
             if ($id > 0 && !empty($assetNumber) && !empty($userName) && !empty($checkoutTime)) {
-                list($userId, $userEmail) = $this->resolveEditedLink($id, trim((string)($post['user_id'] ?? '')));
+                $original = $this->checkouts->find($id);
+                list($userId, $userEmail) = $this->resolveEditedLink($original, trim((string)($post['user_id'] ?? '')));
                 $this->checkouts->update($id, $assetNumber, $userName, $checkoutTime, $checkinTime, $userId, $userEmail);
-                return new Alert("Record #$id successfully updated.", "success");
+
+                $message = "Record #$id successfully updated.";
+                if (!empty($post['link_matching']) && $userId !== null && $original && $original['user_id'] !== $userId) {
+                    // Other checkouts where the student typed their name the same way
+                    $linked = $this->checkouts->linkUnlinkedByName($original['user_name'], $userName, $userId, $userEmail);
+                    if ($linked > 0) {
+                        $message .= " Also linked $linked other " . ($linked === 1 ? 'record' : 'records') . " named “{$original['user_name']}”.";
+                    }
+                }
+                return new Alert($message, "success");
             }
             return new Alert("Error: Asset number, user name, and check-out time are required.", "danger");
+        } elseif ($action === 'send_report') {
+            return $this->sendReport($post);
         } elseif ($action === 'save_settings' || $action === 'test_email') {
             return $this->saveSettings($post, $action === 'test_email');
         } elseif ($action === 'save_directory' || $action === 'sync_directory') {
@@ -87,19 +106,19 @@ class AdminController
 
     /**
      * The directory link to save with an edited record. The edit form submits the linked
-     * person's ID; it's cleared in the browser as soon as the name is edited by hand, so
-     * any typed name is saved unlinked.
+     * person's ID: the record's existing link, someone picked from the directory search
+     * (which also replaces the name), or empty when unlinked.
      *
+     * @param array|null $record The record before this edit
      * @return array [user_id, user_email], both null when unlinked
      */
-    private function resolveEditedLink(int $recordId, string $userId): array
+    private function resolveEditedLink(?array $record, string $userId): array
     {
         if ($userId === '') {
             return [null, null];
         }
 
         // Unchanged link: keep the email recorded at checkout
-        $record = $this->checkouts->find($recordId);
         if ($record && $record['user_id'] === $userId) {
             return [$record['user_id'], $record['user_email']];
         }
@@ -156,6 +175,42 @@ class AdminController
         $result = $this->directorySync->run(time(), true);
         $ok = ($this->directorySync->lastResult()['ok'] ?? false);
         return new Alert("$saved $result", $ok ? 'success' : 'danger', 'directory');
+    }
+
+    private function sendReport(array $post): Alert
+    {
+        $range = (string)($post['report_range'] ?? '');
+        $recipientText = trim(str_replace(["\r", "\n"], '', (string)($post['report_recipients'] ?? '')));
+        $recipients = UsageReport::parseRecipients($recipientText);
+        $this->reportDraft = ['range' => $range, 'recipients' => implode(', ', $recipients)];
+
+        $errors = [];
+        if (!isset(UsageReport::RANGES[$range])) {
+            $errors[] = 'Choose a time range.';
+        }
+        if (empty($recipients)) {
+            $errors[] = 'Enter at least one email address to send the report to.';
+        }
+        foreach ($recipients as $address) {
+            if (!filter_var($address, FILTER_VALIDATE_EMAIL)) {
+                $errors[] = "\"$address\" is not a valid email address.";
+            }
+        }
+        $config = NotificationSettings::load($this->settings);
+        if ($config->smtpHost === '' || $config->fromAddress === '') {
+            $errors[] = 'Set up the SMTP relay and From address under Overdue Email Notifications first.';
+        }
+        if ($errors) {
+            return new Alert('Report not sent. ' . implode(' ', $errors), 'danger', 'report');
+        }
+
+        $this->settings->setMany([UsageReport::RECIPIENTS => $this->reportDraft['recipients']]);
+        try {
+            $message = $this->report->send($range, $recipients, $config, time());
+        } catch (RuntimeException $e) {
+            return new Alert('Report not sent: ' . $e->getMessage(), 'danger', 'report');
+        }
+        return new Alert($message, 'success', 'report');
     }
 
     private function saveSettings(array $post, bool $sendTest): Alert
